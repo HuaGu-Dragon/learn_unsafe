@@ -1,4 +1,8 @@
-use std::{alloc::Layout, ptr::NonNull};
+use std::{
+    alloc::Layout,
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+};
 
 #[allow(dead_code)]
 pub struct Vec<T> {
@@ -10,6 +14,7 @@ pub struct Vec<T> {
 unsafe impl<T: Send> Send for Vec<T> {}
 unsafe impl<T: Sync> Sync for Vec<T> {}
 
+#[allow(dead_code)]
 impl<T> Vec<T> {
     fn new() -> Self {
         Vec {
@@ -87,6 +92,50 @@ impl<T> Vec<T> {
             let value = std::ptr::read(self.ptr.as_ptr().add(self.len));
             Some(value)
         }
+    }
+
+    pub fn insert(&mut self, index: usize, value: T) {
+        assert!(index <= self.len, "Index out of bounds");
+        if self.len == self.cap {
+            self.grow();
+        }
+        unsafe {
+            std::ptr::copy(
+                self.ptr.as_ptr().add(index),
+                self.ptr.as_ptr().add(index + 1),
+                self.len - index,
+            );
+            std::ptr::write(self.ptr.as_ptr().add(index), value);
+        }
+        self.len += 1;
+    }
+
+    pub fn remove(&mut self, index: usize) -> T {
+        assert!(index < self.len, "Index out of bounds");
+        self.len -= 1;
+        unsafe {
+            let value = std::ptr::read(self.ptr.as_ptr().add(index));
+            std::ptr::copy(
+                self.ptr.as_ptr().add(index + 1),
+                self.ptr.as_ptr().add(index),
+                self.len - index,
+            );
+            value
+        }
+    }
+}
+
+impl<T> Deref for Vec<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> DerefMut for Vec<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
 
@@ -173,5 +222,62 @@ mod tests {
             }
             assert_eq!(vec.len, 5);
         } // vec goes out of scope here, and DropCounter instances should be dropped
+    }
+
+    #[test]
+    fn test_vec_insert_remove() {
+        let mut vec = Vec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        assert_eq!(vec.len, 3);
+
+        vec.insert(1, 4); // Insert 4 at index 1
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 4);
+        assert_eq!(vec[2], 2);
+        assert_eq!(vec[3], 3);
+        assert_eq!(vec.len, 4);
+
+        let removed_value = vec.remove(2); // Remove value at index 2
+        assert_eq!(removed_value, 2);
+        assert_eq!(vec.len, 3);
+    }
+
+    #[test]
+    fn test_vec_deref() {
+        let mut vec = Vec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 3);
+
+        let slice: &[i32] = &vec;
+        assert_eq!(slice.len(), 3);
+        assert_eq!(slice[0], 1);
+        assert_eq!(slice[1], 2);
+        assert_eq!(slice[2], 3);
+    }
+
+    #[test]
+    fn test_vec_deref_mut() {
+        let mut vec = Vec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 3);
+
+        let slice: &mut [i32] = &mut vec;
+        slice[0] = 10;
+        slice[1] = 20;
+        slice[2] = 30;
+
+        assert_eq!(vec[0], 10);
+        assert_eq!(vec[1], 20);
+        assert_eq!(vec[2], 30);
     }
 }
