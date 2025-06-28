@@ -588,4 +588,21 @@ mod tests {
         assert_eq!(vec.len, 0);
         assert_eq!(vec.cap(), usize::MAX); // Capacity should remain usize::MAX after draining
     }
+
+    #[test]
+    #[should_panic(expected = "Index out of bounds")]
+    fn test_vec_index_out_of_bounds() {
+        let mut vec: Vec<i32> = Vec::new();
+        vec.remove(0); // This should panic
+    }
+
+    #[test]
+    #[should_panic(expected = "Capacity overflow for zero-sized type")]
+    fn test_vec_zero_sized_type_overflow() {
+        #[derive(Debug)]
+        struct ZeroSized;
+        let mut vec = Vec::new();
+        vec.push(ZeroSized);
+        vec.buf.grow(); // This should panic due to overflow
+    }
 }
