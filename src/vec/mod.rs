@@ -38,16 +38,22 @@ unsafe impl<T: Sync> Sync for Vec<T> {}
 
 impl<T> RawVec<T> {
     fn new() -> Self {
+        let cap = if std::mem::size_of::<T>() == 0 {
+            usize::MAX
+        } else {
+            0
+        };
         RawVec {
             ptr: NonNull::dangling(),
-            cap: 0,
+            cap,
         }
     }
 
     fn grow(&mut self) {
-        if std::mem::size_of::<T>() == 0 {
-            panic!("zero-sized types are not supported");
-        }
+        assert!(
+            std::mem::size_of::<T>() != 0,
+            "Capacity overflow for zero-sized type"
+        );
         let (new_cap, new_layout) = if self.cap == 0 {
             (1, std::alloc::Layout::array::<T>(1).unwrap())
         } else {
@@ -108,7 +114,9 @@ impl<T> RawValIter<T> {
     unsafe fn new(slice: &[T]) -> Self {
         RawValIter {
             start: slice.as_ptr(),
-            end: if slice.len() == 0 {
+            end: if std::mem::size_of::<T>() == 0 {
+                ((slice.as_ptr()) as usize + slice.len()) as *const T // For zero-sized types, we use the size of the slice
+            } else if slice.len() == 0 {
                 slice.as_ptr()
             } else {
                 unsafe { slice.as_ptr().add(slice.len()) }
@@ -202,15 +210,22 @@ impl<T> Iterator for RawValIter<T> {
         if self.start == self.end {
             None
         } else {
-            let value = unsafe { std::ptr::read(self.start) };
-            self.start = unsafe { self.start.add(1) };
-            Some(value)
+            if std::mem::size_of::<T>() == 0 {
+                self.start = (self.start as usize + 1) as *const T; // For zero-sized types, we use the size of the slice
+                unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
+            } else {
+                let ptr = self.start; // Save the current pointer
+                self.start = unsafe { self.start.add(1) };
+                unsafe { Some(std::ptr::read(ptr)) }
+            }
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = unsafe { self.end.offset_from(self.start) } as usize;
-        (remaining, Some(remaining))
+        let elem_size = std::mem::size_of::<T>();
+        let len =
+            (self.end as usize - self.start as usize) / if elem_size == 0 { 1 } else { elem_size };
+        (len, Some(len))
     }
 }
 
@@ -219,9 +234,13 @@ impl<T> DoubleEndedIterator for RawValIter<T> {
         if self.start == self.end {
             None
         } else {
-            self.end = unsafe { self.end.sub(1) };
-            let value = unsafe { std::ptr::read(self.end) };
-            Some(value)
+            if std::mem::size_of::<T>() == 0 {
+                self.end = (self.end as usize - 1) as *const T; // For zero-sized types, we use the size of the slice
+                unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
+            } else {
+                self.end = unsafe { self.end.sub(1) };
+                unsafe { Some(std::ptr::read(self.end)) }
+            }
         }
     }
 }
@@ -288,7 +307,8 @@ impl<T> DerefMut for Vec<T> {
 
 impl<T> Drop for RawVec<T> {
     fn drop(&mut self) {
-        if self.cap != 0 {
+        let elem_size = std::mem::size_of::<T>();
+        if self.cap != 0 && elem_size != 0 {
             unsafe {
                 std::alloc::dealloc(
                     self.ptr.as_ptr() as *mut u8,
@@ -510,5 +530,62 @@ mod tests {
 
         // After draining, vec should be empty
         assert_eq!(vec.len, 0);
+    }
+
+    #[test]
+    fn test_vec_size_hint() {
+        let mut vec = Vec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+
+        let iter = vec.into_iter();
+        let (lower, upper) = iter.size_hint();
+        assert_eq!(lower, 3);
+        assert_eq!(upper, Some(3));
+
+        // Test with an empty vector
+        let empty_vec: Vec<i32> = Vec::new();
+        let empty_iter = empty_vec.into_iter();
+        let (lower_empty, upper_empty) = empty_iter.size_hint();
+        assert_eq!(lower_empty, 0);
+        assert_eq!(upper_empty, Some(0));
+    }
+
+    #[test]
+    fn test_vec_zero_sized_type() {
+        #[derive(Debug)]
+        struct ZeroSized;
+
+        impl Drop for ZeroSized {
+            fn drop(&mut self) {
+                // No-op for zero-sized type
+                println!("Dropping ZeroSized");
+            }
+        }
+
+        assert_eq!(std::mem::size_of::<ZeroSized>(), 0);
+
+        let mut vec = Vec::new();
+        vec.push(ZeroSized);
+        vec.push(ZeroSized);
+        vec.push(ZeroSized);
+
+        assert_eq!(vec.len, 3);
+        assert_eq!(vec.cap(), usize::MAX); // Capacity should be usize::MAX for zero-sized types
+
+        let popped = vec.pop();
+        assert!(popped.is_some());
+        assert_eq!(vec.len, 2);
+
+        {
+            let mut drain = vec.drain();
+            assert!(drain.next().is_some());
+            assert!(drain.next().is_some());
+            assert!(drain.next().is_none());
+        }
+
+        assert_eq!(vec.len, 0);
+        assert_eq!(vec.cap(), usize::MAX); // Capacity should remain usize::MAX after draining
     }
 }
