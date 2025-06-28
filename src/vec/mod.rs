@@ -1,20 +1,24 @@
 use std::{
     alloc::Layout,
-    mem::ManuallyDrop,
     ops::{Deref, DerefMut},
-    ptr::NonNull,
+    ptr::{self, NonNull},
 };
 
-#[allow(dead_code)]
-pub struct Vec<T> {
+// A raw vector that holds a pointer to the allocated memory and its capacity.
+// This is a low-level representation of a vector, similar to `Vec<T>` in the standard library.
+struct RawVec<T> {
     ptr: NonNull<T>,
-    len: usize,
     cap: usize,
 }
 
+#[allow(dead_code)]
+pub struct Vec<T> {
+    buf: RawVec<T>,
+    len: usize,
+}
+
 pub struct IntoIter<T> {
-    buf: NonNull<T>,
-    cap: usize,
+    _buf: RawVec<T>,
     start: *const T,
     end: *const T,
 }
@@ -22,12 +26,10 @@ pub struct IntoIter<T> {
 unsafe impl<T: Send> Send for Vec<T> {}
 unsafe impl<T: Sync> Sync for Vec<T> {}
 
-#[allow(dead_code)]
-impl<T> Vec<T> {
+impl<T> RawVec<T> {
     fn new() -> Self {
-        Vec {
+        RawVec {
             ptr: NonNull::dangling(),
-            len: 0,
             cap: 0,
         }
     }
@@ -80,13 +82,31 @@ impl<T> Vec<T> {
         };
         self.cap = new_cap;
     }
+}
+
+#[allow(dead_code)]
+impl<T> Vec<T> {
+    fn new() -> Self {
+        Vec {
+            buf: RawVec::new(),
+            len: 0,
+        }
+    }
+
+    fn ptr(&self) -> *mut T {
+        self.buf.ptr.as_ptr()
+    }
+
+    pub fn cap(&self) -> usize {
+        self.buf.cap
+    }
 
     pub fn push(&mut self, value: T) {
-        if self.len == self.cap {
-            self.grow();
+        if self.len == self.cap() {
+            self.buf.grow();
         }
         unsafe {
-            std::ptr::write(self.ptr.as_ptr().add(self.len), value);
+            std::ptr::write(self.ptr().add(self.len), value);
         }
         self.len += 1;
     }
@@ -97,23 +117,23 @@ impl<T> Vec<T> {
         }
         self.len -= 1;
         unsafe {
-            let value = std::ptr::read(self.ptr.as_ptr().add(self.len));
+            let value = std::ptr::read(self.ptr().add(self.len));
             Some(value)
         }
     }
 
     pub fn insert(&mut self, index: usize, value: T) {
         assert!(index <= self.len, "Index out of bounds");
-        if self.len == self.cap {
-            self.grow();
+        if self.len == self.cap() {
+            self.buf.grow();
         }
         unsafe {
             std::ptr::copy(
-                self.ptr.as_ptr().add(index),
-                self.ptr.as_ptr().add(index + 1),
+                self.ptr().add(index),
+                self.ptr().add(index + 1),
                 self.len - index,
             );
-            std::ptr::write(self.ptr.as_ptr().add(index), value);
+            std::ptr::write(self.ptr().add(index), value);
         }
         self.len += 1;
     }
@@ -122,10 +142,10 @@ impl<T> Vec<T> {
         assert!(index < self.len, "Index out of bounds");
         self.len -= 1;
         unsafe {
-            let value = std::ptr::read(self.ptr.as_ptr().add(index));
+            let value = std::ptr::read(self.ptr().add(index));
             std::ptr::copy(
-                self.ptr.as_ptr().add(index + 1),
-                self.ptr.as_ptr().add(index),
+                self.ptr().add(index + 1),
+                self.ptr().add(index),
                 self.len - index,
             );
             value
@@ -138,20 +158,18 @@ impl<T> IntoIterator for Vec<T> {
     type IntoIter = IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let vec = ManuallyDrop::new(self);
-        let ptr = vec.ptr;
-        let len = vec.len;
-        let cap = vec.cap;
+        let buf = unsafe { ptr::read(&self.buf) };
+        let len = self.len;
+        std::mem::forget(self); // Prevent Vec from dropping its buffer
         IntoIter {
-            buf: ptr,
-            cap,
-            start: ptr.as_ptr(),
-            end: if cap == 0 {
+            start: buf.ptr.as_ptr(),
+            end: if buf.cap == 0 {
                 // can not use `ptr.as_ptr().add(len)` here because it will panic if len is 0
-                ptr.as_ptr()
+                buf.ptr.as_ptr()
             } else {
-                unsafe { ptr.as_ptr().add(len) }
+                unsafe { buf.ptr.as_ptr().add(len) }
             },
+            _buf: buf,
         }
     }
 }
@@ -188,25 +206,20 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 impl<T> Deref for Vec<T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
-        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+        unsafe { std::slice::from_raw_parts(self.ptr(), self.len) }
     }
 }
 
 impl<T> DerefMut for Vec<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+        unsafe { std::slice::from_raw_parts_mut(self.ptr(), self.len) }
     }
 }
 
-impl<T> Drop for Vec<T> {
+impl<T> Drop for RawVec<T> {
     fn drop(&mut self) {
         if self.cap != 0 {
             unsafe {
-                // Drop each element in the vector
-                for i in 0..self.len {
-                    std::ptr::drop_in_place(self.ptr.as_ptr().add(i));
-                }
-                // Deallocate the memory
                 std::alloc::dealloc(
                     self.ptr.as_ptr() as *mut u8,
                     Layout::array::<T>(self.cap).unwrap(),
@@ -216,19 +229,24 @@ impl<T> Drop for Vec<T> {
     }
 }
 
+impl<T> Drop for Vec<T> {
+    fn drop(&mut self) {
+        unsafe {
+            // Drop each element in the vector
+            for i in 0..self.len {
+                std::ptr::drop_in_place(self.ptr().add(i));
+            }
+        }
+    }
+}
+
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
-        if self.cap != 0 {
-            for i in 0..self.cap {
-                unsafe {
-                    std::ptr::drop_in_place(self.buf.as_ptr().add(i));
-                }
-            }
-            unsafe {
-                std::alloc::dealloc(
-                    self.buf.as_ptr() as *mut u8,
-                    Layout::array::<T>(self.cap).unwrap(),
-                );
+        unsafe {
+            // Drop each element in the iterator
+            while self.start != self.end {
+                std::ptr::drop_in_place(self.start as *mut T);
+                self.start = self.start.add(1);
             }
         }
     }
@@ -245,7 +263,7 @@ mod tests {
     fn test_vec_new() {
         let vec: Vec<i32> = Vec::new();
         assert_eq!(vec.len, 0);
-        assert_eq!(vec.cap, 0);
+        assert_eq!(vec.cap(), 0);
     }
 
     #[test]
@@ -255,19 +273,19 @@ mod tests {
         vec.push(2);
         vec.push(3);
         assert_eq!(vec.len, 3);
-        assert_eq!(vec.cap, 4); // Initial capacity should be 4 after first grow
+        assert_eq!(vec.cap(), 4); // Initial capacity should be 4 after first grow
 
         assert_eq!(vec.pop(), Some(3));
         assert_eq!(vec.len, 2);
-        assert_eq!(vec.cap, 4);
+        assert_eq!(vec.cap(), 4);
 
         assert_eq!(vec.pop(), Some(2));
         assert_eq!(vec.len, 1);
-        assert_eq!(vec.cap, 4);
+        assert_eq!(vec.cap(), 4);
 
         assert_eq!(vec.pop(), Some(1));
         assert_eq!(vec.len, 0);
-        assert_eq!(vec.cap, 4);
+        assert_eq!(vec.cap(), 4);
 
         assert_eq!(vec.pop(), None); // Should return None when empty
     }
@@ -279,7 +297,7 @@ mod tests {
             vec.push(i);
         }
         assert_eq!(vec.len, 10);
-        assert!(vec.cap >= 10); // Capacity should be at least 10 after multiple pushes
+        assert!(vec.cap() >= 10); // Capacity should be at least 10 after multiple pushes
     }
 
     #[test]
