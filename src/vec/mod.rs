@@ -1,5 +1,6 @@
 use std::{
     alloc::Layout,
+    marker::PhantomData,
     ops::{Deref, DerefMut},
     ptr::{self, NonNull},
 };
@@ -11,16 +12,25 @@ struct RawVec<T> {
     cap: usize,
 }
 
+struct RawValIter<T> {
+    start: *const T,
+    end: *const T,
+}
+
 #[allow(dead_code)]
 pub struct Vec<T> {
     buf: RawVec<T>,
     len: usize,
 }
 
+pub struct Drain<'a, T> {
+    vec: PhantomData<&'a mut Vec<T>>,
+    iter: RawValIter<T>,
+}
+
 pub struct IntoIter<T> {
     _buf: RawVec<T>,
-    start: *const T,
-    end: *const T,
+    iter: RawValIter<T>,
 }
 
 unsafe impl<T: Send> Send for Vec<T> {}
@@ -84,6 +94,29 @@ impl<T> RawVec<T> {
     }
 }
 
+impl<T> RawValIter<T> {
+    /***
+     * Creates a new `RawValIter` from a slice is unsafe
+     * because it assumes that the slice is valid and that the pointers
+     * are not null. If the slice is empty, it will set both `start`
+     * and `end` to the same pointer, which is the null pointer.
+     *
+     * notice that the struct does not have a lifetime parameter,
+     * so it can be used with any slice of `T` without requiring
+     * a specific lifetime.
+     */
+    unsafe fn new(slice: &[T]) -> Self {
+        RawValIter {
+            start: slice.as_ptr(),
+            end: if slice.len() == 0 {
+                slice.as_ptr()
+            } else {
+                unsafe { slice.as_ptr().add(slice.len()) }
+            },
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl<T> Vec<T> {
     fn new() -> Self {
@@ -122,6 +155,15 @@ impl<T> Vec<T> {
         }
     }
 
+    pub fn drain(&mut self) -> Drain<T> {
+        let iter = unsafe { RawValIter::new(&self) };
+        self.len = 0; // Reset length to 0, as Drain will consume the elements
+        Drain {
+            vec: PhantomData,
+            iter,
+        }
+    }
+
     pub fn insert(&mut self, index: usize, value: T) {
         assert!(index <= self.len, "Index out of bounds");
         if self.len == self.cap() {
@@ -153,37 +195,17 @@ impl<T> Vec<T> {
     }
 }
 
-impl<T> IntoIterator for Vec<T> {
-    type Item = T;
-    type IntoIter = IntoIter<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        let buf = unsafe { ptr::read(&self.buf) };
-        let len = self.len;
-        std::mem::forget(self); // Prevent Vec from dropping its buffer
-        IntoIter {
-            start: buf.ptr.as_ptr(),
-            end: if buf.cap == 0 {
-                // can not use `ptr.as_ptr().add(len)` here because it will panic if len is 0
-                buf.ptr.as_ptr()
-            } else {
-                unsafe { buf.ptr.as_ptr().add(len) }
-            },
-            _buf: buf,
-        }
-    }
-}
-
-impl<T> Iterator for IntoIter<T> {
+impl<T> Iterator for RawValIter<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.start == self.end {
-            return None;
+            None
+        } else {
+            let value = unsafe { std::ptr::read(self.start) };
+            self.start = unsafe { self.start.add(1) };
+            Some(value)
         }
-        let value = unsafe { std::ptr::read(self.start) };
-        self.start = unsafe { self.start.add(1) };
-        Some(value)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -192,14 +214,62 @@ impl<T> Iterator for IntoIter<T> {
     }
 }
 
-impl<T> DoubleEndedIterator for IntoIter<T> {
+impl<T> DoubleEndedIterator for RawValIter<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.start == self.end {
-            return None;
+            None
+        } else {
+            self.end = unsafe { self.end.sub(1) };
+            let value = unsafe { std::ptr::read(self.end) };
+            Some(value)
         }
-        self.end = unsafe { self.end.sub(1) };
-        let value = unsafe { std::ptr::read(self.end) };
-        Some(value)
+    }
+}
+
+impl<T> IntoIterator for Vec<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let iter = unsafe { RawValIter::new(&self) };
+        let buf = unsafe { ptr::read(&self.buf) };
+        std::mem::forget(self); // Prevent Vec from dropping its buffer
+        IntoIter { iter, _buf: buf }
+    }
+}
+
+impl<'a, T> Iterator for Drain<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for Drain<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
+    }
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
     }
 }
 
@@ -240,14 +310,19 @@ impl<T> Drop for Vec<T> {
     }
 }
 
+impl<'a, T> Drop for Drain<'a, T> {
+    fn drop(&mut self) {
+        while let Some(_) = self.iter.next() {
+            // Just consume the iterator to drop elements
+        }
+    }
+}
+
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
-        unsafe {
-            // Drop each element in the iterator
-            while self.start != self.end {
-                std::ptr::drop_in_place(self.start as *mut T);
-                self.start = self.start.add(1);
-            }
+        // Drop each element in the iterator
+        while let Some(_) = self.iter.next() {
+            // Just consume the iterator to drop elements
         }
     }
 }
@@ -412,5 +487,28 @@ mod tests {
         let (lower, upper) = iter.size_hint();
         assert_eq!(lower, 0);
         assert_eq!(upper, Some(0));
+    }
+
+    #[test]
+    fn test_drain() {
+        let mut vec = Vec::new();
+        vec.push(1);
+        vec.push(2);
+        vec.push(3);
+        vec.push(4);
+        vec.push(5);
+
+        {
+            let mut drain = vec.drain(); // Drain all elements
+            assert_eq!(drain.next(), Some(1));
+            assert_eq!(drain.next(), Some(2));
+            assert_eq!(drain.next(), Some(3));
+            assert_eq!(drain.next(), Some(4));
+            assert_eq!(drain.next(), Some(5));
+            assert_eq!(drain.next(), None); // Should return None when empty
+        }
+
+        // After draining, vec should be empty
+        assert_eq!(vec.len, 0);
     }
 }
