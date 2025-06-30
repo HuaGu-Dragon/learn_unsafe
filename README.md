@@ -3,6 +3,6 @@
 * learning unsafe rust from The Rustonomicon
 * [x] unsafe vec
 * [ ] unsafe link_list
-* [ ] unsafe box
+* [x] unsafe box
 * [ ] unsafe Arc
 * [ ] unsafe Mutex
