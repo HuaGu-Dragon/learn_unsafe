@@ -55,3 +55,21 @@ impl<T> Clone for Arc<T> {
         }
     }
 }
+
+impl<T> Drop for Arc<T> {
+    fn drop(&mut self) {
+        let inner = unsafe { self.ptr.as_ref() };
+
+        if inner.rc.fetch_sub(1, std::sync::atomic::Ordering::Release) != 1 {
+            return;
+        }
+
+        // std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
+        inner.rc.load(std::sync::atomic::Ordering::Acquire);
+        // If the reference count reaches zero, we can safely deallocate the memory
+        unsafe {
+            // Convert the pointer back to Box to deallocate
+            Box::from_raw(self.ptr.as_ptr());
+        }
+    }
+}
