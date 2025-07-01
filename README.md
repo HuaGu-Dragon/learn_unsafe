@@ -4,5 +4,5 @@
 * [x] unsafe vec
 * [ ] unsafe link_list
 * [x] unsafe box
-* [ ] unsafe Arc
+* [x] unsafe Arc
 * [ ] unsafe Mutex
