@@ -39,3 +39,19 @@ impl<T> Deref for Arc<T> {
         &inner.data
     }
 }
+
+impl<T> Clone for Arc<T> {
+    fn clone(&self) -> Self {
+        let inner = unsafe { self.ptr.as_ref() };
+        // Increment the reference count atomically
+        let old_rc = inner.rc.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        if old_rc >= isize::MAX as usize {
+            std::process::abort(); // Prevent overflow
+        }
+        Arc {
+            ptr: self.ptr,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
