@@ -10,6 +10,7 @@ use std::{
 struct RawVec<T> {
     ptr: NonNull<T>,
     cap: usize,
+    _marker: PhantomData<T>,
 }
 
 struct RawValIter<T> {
@@ -45,6 +46,7 @@ impl<T> RawVec<T> {
             } else {
                 0
             },
+            _marker: PhantomData,
         }
     }
 

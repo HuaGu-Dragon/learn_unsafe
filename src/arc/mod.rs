@@ -73,3 +73,71 @@ impl<T> Drop for Arc<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arc_creation() {
+        let arc = Arc::new(42);
+        assert_eq!(*arc, 42);
+    }
+
+    #[test]
+    fn arc_clone() {
+        let arc1 = Arc::new(42);
+        let arc2 = arc1.clone();
+        assert_eq!(*arc1, *arc2);
+        assert_eq!(arc1.ptr, arc2.ptr); // Ensure they point to the same memory
+    }
+
+    #[test]
+    fn arc_drop() {
+        {
+            let _arc = Arc::new(42);
+            // The memory should be deallocated when _arc goes out of scope
+        }
+    }
+
+    #[test]
+    fn thread_safety() {
+        let arc = Arc::new(42);
+        let arc_clone = arc.clone();
+
+        let handle = std::thread::spawn(move || {
+            assert_eq!(*arc_clone, 42);
+        });
+
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn high_pressure() {
+        let arc = Arc::new(42);
+        let mut handles = vec![];
+
+        for _ in 0..1000 {
+            let arc_clone = arc.clone();
+            let handle = std::thread::spawn(move || {
+                assert_eq!(*arc_clone, 42);
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        unsafe {
+            assert!(
+                arc.ptr
+                    .as_ref()
+                    .rc
+                    .load(std::sync::atomic::Ordering::Acquire)
+                    == 1,
+                "Reference count should be 1 after all threads have joined"
+            );
+        }
+    }
+}
