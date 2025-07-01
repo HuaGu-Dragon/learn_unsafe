@@ -38,14 +38,13 @@ unsafe impl<T: Sync> Sync for Vec<T> {}
 
 impl<T> RawVec<T> {
     fn new() -> Self {
-        let cap = if std::mem::size_of::<T>() == 0 {
-            usize::MAX
-        } else {
-            0
-        };
         RawVec {
             ptr: NonNull::dangling(),
-            cap,
+            cap: if std::mem::size_of::<T>() == 0 {
+                usize::MAX
+            } else {
+                0
+            },
         }
     }
 
