@@ -1,4 +1,4 @@
-use std::{ptr::NonNull, sync::atomic::AtomicUsize};
+use std::{ops::Deref, ptr::NonNull, sync::atomic::AtomicUsize};
 
 use crate::r#box::Box;
 
@@ -14,6 +14,9 @@ struct ArcInner<T> {
 
 impl<T> Arc<T> {
     pub fn new(data: T) -> Self {
+        // Create a Box containing the ArcInner structure
+        // and initialize the reference count to 1.
+        // This is done to ensure that the data is heap-allocated
         let boxed = Box::new(ArcInner {
             rc: AtomicUsize::new(1),
             data,
@@ -27,3 +30,12 @@ impl<T> Arc<T> {
 
 unsafe impl<T: Send + Sync> Send for Arc<T> {}
 unsafe impl<T: Send + Sync> Sync for Arc<T> {}
+
+impl<T> Deref for Arc<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        let inner = unsafe { self.ptr.as_ref() };
+        &inner.data
+    }
+}
