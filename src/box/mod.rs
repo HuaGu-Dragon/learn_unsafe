@@ -232,7 +232,8 @@ mod test {
         assert!(!raw_ptr.is_null());
         // Ensure that the Box is no longer valid after calling into_raw
         // This is a safety check, not a runtime check
-        // std::mem::forget(b); // Uncommenting this line would prevent the drop
+        unsafe { Box::from_raw(raw_ptr) }; // Convert back to Box to avoid memory leak
+        // This should not panic, as we are converting back to Box<String>
     }
 
     #[test]
