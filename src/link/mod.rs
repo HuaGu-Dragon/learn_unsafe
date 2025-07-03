@@ -29,7 +29,7 @@ impl<T> List<T> {
         let new_node = unsafe {
             NonNull::new_unchecked(Box::into_raw(Box::new(Node {
                 front: None,
-                back: self.head,
+                back: None,
                 elem,
             })))
         };
@@ -60,6 +60,47 @@ impl<T> List<T> {
             } else {
                 self.tail = None;
             }
+            elem
+        })
+    }
+
+    pub fn push_back(&mut self, elem: T) {
+        let new_node = unsafe {
+            NonNull::new_unchecked(Box::into_raw(Box::new(Node {
+                front: None,
+                back: None,
+                elem,
+            })))
+        };
+
+        if let Some(old_tail) = self.tail {
+            unsafe {
+                (*old_tail.as_ptr()).back = Some(new_node);
+                (*new_node.as_ptr()).front = Some(old_tail);
+            }
+        } else {
+            self.head = Some(new_node);
+        }
+        self.tail = Some(new_node);
+        self.len += 1;
+    }
+
+    pub fn pop_back(&mut self) -> Option<T> {
+        self.tail.map(|node| {
+            self.len -= 1;
+
+            let node = unsafe { Box::from_raw(node.as_ptr()) };
+            let elem = node.elem;
+
+            self.tail = node.front;
+            if let Some(new_tail) = self.tail {
+                unsafe {
+                    (*new_tail.as_ptr()).back = None;
+                }
+            } else {
+                self.head = None;
+            }
+
             elem
         })
     }
