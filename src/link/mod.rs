@@ -128,6 +128,45 @@ impl<T> List<T> {
     pub fn len(&self) -> usize {
         self.len
     }
+
+    pub fn iter(&self) -> Iter<T> {
+        self.into_iter()
+    }
+
+    pub fn into_iter(self) -> IntoIter<T> {
+        IntoIter { list: self }
+    }
+
+    pub fn clear(&mut self) {
+        while let Some(_) = self.pop_front() {
+            // Continuously pop elements until the list is empty
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a List<T> {
+    type Item = &'a T;
+
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter {
+            front: self.head,
+            back: self.tail,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T> IntoIterator for List<T> {
+    type Item = T;
+
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_iter()
+    }
 }
 
 impl<T> Drop for List<T> {
@@ -181,6 +220,34 @@ impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
 impl<'a, T> ExactSizeIterator for Iter<'a, T> {
     fn len(&self) -> usize {
         self.len
+    }
+}
+
+pub struct IntoIter<T> {
+    list: List<T>,
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.list.pop_front()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.list.len(), Some(self.list.len()))
+    }
+}
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.list.pop_back()
+    }
+}
+
+impl<T> ExactSizeIterator for IntoIter<T> {
+    fn len(&self) -> usize {
+        self.list.len()
     }
 }
 
