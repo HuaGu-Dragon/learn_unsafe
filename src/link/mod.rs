@@ -308,7 +308,150 @@ mod tests {
     }
 
     #[test]
-    fn test_drop() {
+    fn test_iter() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_into_iter() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut into_iter = list.into_iter();
+        assert_eq!(into_iter.next(), Some(1));
+        assert_eq!(into_iter.next(), Some(2));
+        assert_eq!(into_iter.next(), Some(3));
+        assert_eq!(into_iter.next(), None);
+    }
+
+    #[test]
+    fn test_clear() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.len(), 3);
+
+        list.clear();
+        assert!(list.is_empty());
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.front(), None);
+        assert_eq!(list.back(), None);
+    }
+
+    #[test]
+    fn test_size_hint() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.size_hint(), (3, Some(3)));
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.size_hint(), (2, Some(2)));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.size_hint(), (1, Some(1)));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.size_hint(), (0, Some(0)));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_double_ended_iter() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.next_back(), Some(&3));
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next_back(), Some(&2));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_exact_size_iter() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.len(), 3);
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.len(), 2);
+        assert_eq!(iter.next_back(), Some(&3));
+        assert_eq!(iter.len(), 1);
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.len(), 0);
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_into_iter_size_hint() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut into_iter = list.into_iter();
+        assert_eq!(into_iter.size_hint(), (3, Some(3)));
+        assert_eq!(into_iter.next(), Some(1));
+        assert_eq!(into_iter.size_hint(), (2, Some(2)));
+        assert_eq!(into_iter.next(), Some(2));
+        assert_eq!(into_iter.size_hint(), (1, Some(1)));
+        assert_eq!(into_iter.next(), Some(3));
+        assert_eq!(into_iter.size_hint(), (0, Some(0)));
+        assert_eq!(into_iter.next(), None);
+    }
+
+    #[test]
+    fn test_into_iter_double_ended() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut into_iter = list.into_iter();
+        assert_eq!(into_iter.next_back(), Some(3));
+        assert_eq!(into_iter.next(), Some(1));
+        assert_eq!(into_iter.next_back(), Some(2));
+        assert_eq!(into_iter.next(), None);
+    }
+
+    #[test]
+    fn test_into_iter_exact_size() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut into_iter = list.into_iter();
+        assert_eq!(into_iter.len(), 3);
+        assert_eq!(into_iter.next(), Some(1));
+        assert_eq!(into_iter.len(), 2);
+        assert_eq!(into_iter.next_back(), Some(3));
+        assert_eq!(into_iter.len(), 1);
+        assert_eq!(into_iter.next(), Some(2));
+        assert_eq!(into_iter.len(), 0);
+        assert_eq!(into_iter.next(), None);
+    }
+
+    #[test]
+    fn test_list_with_drop() {
         struct DropItem(i32);
 
         impl Drop for DropItem {
