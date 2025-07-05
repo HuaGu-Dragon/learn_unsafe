@@ -133,6 +133,10 @@ impl<T> List<T> {
         self.into_iter()
     }
 
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        self.into_iter()
+    }
+
     pub fn into_iter(self) -> IntoIter<T> {
         IntoIter { list: self }
     }
@@ -151,6 +155,21 @@ impl<'a, T> IntoIterator for &'a List<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         Iter {
+            front: self.head,
+            back: self.tail,
+            len: self.len,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut List<T> {
+    type Item = &'a mut T;
+
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut {
             front: self.head,
             back: self.tail,
             len: self.len,
@@ -218,6 +237,53 @@ impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
 }
 
 impl<'a, T> ExactSizeIterator for Iter<'a, T> {
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
+pub struct IterMut<'a, T> {
+    front: Link<T>,
+    back: Link<T>,
+    len: usize,
+    _marker: std::marker::PhantomData<&'a mut T>,
+}
+
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.len != 0 {
+            self.front.map(|mut node| {
+                self.len -= 1;
+                self.front = unsafe { (*node.as_ptr()).back };
+                unsafe { &mut node.as_mut().elem }
+            })
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.len != 0 {
+            self.back.map(|mut node| {
+                self.len -= 1;
+                self.back = unsafe { (*node.as_ptr()).front };
+                unsafe { &mut node.as_mut().elem }
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, T> ExactSizeIterator for IterMut<'a, T> {
     fn len(&self) -> usize {
         self.len
     }
@@ -469,5 +535,73 @@ mod tests {
 
         let list: List<i32> = List::new();
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        for elem in list.iter_mut() {
+            *elem *= 2;
+        }
+
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&4));
+        assert_eq!(iter.next(), Some(&6));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn test_iter_mut_size_hint() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter_mut = list.iter_mut();
+        assert_eq!(iter_mut.size_hint(), (3, Some(3)));
+        assert_eq!(iter_mut.next(), Some(&mut 1));
+        assert_eq!(iter_mut.size_hint(), (2, Some(2)));
+        assert_eq!(iter_mut.next(), Some(&mut 2));
+        assert_eq!(iter_mut.size_hint(), (1, Some(1)));
+        assert_eq!(iter_mut.next(), Some(&mut 3));
+        assert_eq!(iter_mut.size_hint(), (0, Some(0)));
+        assert_eq!(iter_mut.next(), None);
+    }
+
+    #[test]
+    fn test_iter_mut_double_ended() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter_mut = list.iter_mut();
+        assert_eq!(iter_mut.next_back(), Some(&mut 3));
+        assert_eq!(iter_mut.next(), Some(&mut 1));
+        assert_eq!(iter_mut.next_back(), Some(&mut 2));
+        assert_eq!(iter_mut.next(), None);
+    }
+
+    #[test]
+    fn test_iter_mut_exact_size() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut iter_mut = list.iter_mut();
+        assert_eq!(iter_mut.len(), 3);
+        assert_eq!(iter_mut.next(), Some(&mut 1));
+        assert_eq!(iter_mut.len(), 2);
+        assert_eq!(iter_mut.next_back(), Some(&mut 3));
+        assert_eq!(iter_mut.len(), 1);
+        assert_eq!(iter_mut.next(), Some(&mut 2));
+        assert_eq!(iter_mut.len(), 0);
+        assert_eq!(iter_mut.next(), None);
     }
 }
