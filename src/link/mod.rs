@@ -1,4 +1,5 @@
 use core::ptr::NonNull;
+use std::{fmt::Debug, hash::Hash};
 
 pub struct List<T> {
     head: Link<T>,
@@ -192,6 +193,77 @@ impl<T> Drop for List<T> {
     fn drop(&mut self) {
         while let Some(_) = self.pop_front() {
             // Continuously pop elements until the list is empty
+        }
+    }
+}
+
+impl<T> Default for List<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Clone> Clone for List<T> {
+    fn clone(&self) -> Self {
+        let mut new_list = List::new();
+        for elem in self {
+            new_list.push_back(elem.clone());
+        }
+        new_list
+    }
+}
+
+impl<T> Extend<T> for List<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        for elem in iter {
+            self.push_back(elem);
+        }
+    }
+}
+
+impl<T> FromIterator<T> for List<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut list = List::new();
+        list.extend(iter);
+        list
+    }
+}
+
+impl<T: Debug> Debug for List<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl<T: PartialEq> PartialEq for List<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.len() != other.len() || !self.iter().eq(other.iter())
+    }
+}
+
+impl<T: Eq> Eq for List<T> {}
+
+impl<T: PartialOrd> PartialOrd for List<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.iter().partial_cmp(other.iter())
+    }
+}
+
+impl<T: Ord> Ord for List<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.iter().cmp(other.iter())
+    }
+}
+
+impl<T: Hash> Hash for List<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.len.hash(state);
+        for elem in self.iter() {
+            elem.hash(state);
         }
     }
 }
@@ -603,5 +675,156 @@ mod tests {
         assert_eq!(iter_mut.next(), Some(&mut 2));
         assert_eq!(iter_mut.len(), 0);
         assert_eq!(iter_mut.next(), None);
+    }
+
+    #[test]
+    fn test_list_clone() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let cloned_list = list.clone();
+        assert_eq!(cloned_list.len(), 3);
+        assert_eq!(cloned_list.front(), Some(&1));
+        assert_eq!(cloned_list.back(), Some(&3));
+    }
+
+    #[test]
+    fn test_list_default() {
+        let list: List<i32> = List::default();
+        assert!(list.is_empty());
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.front(), None);
+        assert_eq!(list.back(), None);
+    }
+
+    #[test]
+    fn test_list_extend() {
+        let mut list = List::new();
+        list.extend(vec![1, 2, 3]);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.front(), Some(&1));
+        assert_eq!(list.back(), Some(&3));
+    }
+
+    #[test]
+    fn test_list_from_iter() {
+        let list: List<i32> = vec![1, 2, 3].into_iter().collect();
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.front(), Some(&1));
+        assert_eq!(list.back(), Some(&3));
+    }
+
+    #[test]
+    fn test_list_partial_eq() {
+        let mut list1 = List::new();
+        list1.push_back(1);
+        list1.push_back(2);
+
+        let mut list2 = List::new();
+        list2.push_back(1);
+        list2.push_back(2);
+
+        assert_eq!(list1, list2);
+        assert_ne!(list1, List::new());
+    }
+
+    #[test]
+    fn test_list_partial_ord() {
+        let mut list1 = List::new();
+        list1.push_back(1);
+        list1.push_back(2);
+
+        let mut list2 = List::new();
+        list2.push_back(1);
+        list2.push_back(3);
+
+        assert!(list1 < list2);
+        assert!(list2 > list1);
+        assert!(list1 <= list2);
+        assert!(list2 >= list1);
+
+        let mut list3 = List::new();
+        list3.push_back(1);
+        list3.push_back(2);
+
+        assert_eq!(list1, list3);
+    }
+
+    #[test]
+    fn test_list_ord() {
+        let mut list1 = List::new();
+        list1.push_back(1);
+        list1.push_back(2);
+
+        let mut list2 = List::new();
+        list2.push_back(1);
+        list2.push_back(3);
+
+        assert!(list1 < list2);
+        assert!(list2 > list1);
+        assert!(list1 <= list2);
+        assert!(list2 >= list1);
+
+        let mut list3 = List::new();
+        list3.push_back(1);
+        list3.push_back(2);
+
+        assert_eq!(list1, list3);
+    }
+
+    #[test]
+    fn test_list_hash() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let mut hasher = DefaultHasher::new();
+        list.hash(&mut hasher);
+        let hash1 = hasher.finish();
+
+        let mut list2 = List::new();
+        list2.push_back(1);
+        list2.push_back(2);
+        list2.push_back(3);
+
+        let mut hasher2 = DefaultHasher::new();
+        list2.hash(&mut hasher2);
+        let hash2 = hasher2.finish();
+
+        assert_eq!(hash1, hash2);
+
+        let mut map = std::collections::HashMap::new();
+        let list1 = (1..10).collect::<List<i32>>();
+        let list2 = (10..20).collect::<List<i32>>();
+
+        assert_eq!(map.insert(list1.clone(), "list1"), None);
+        assert_eq!(map.insert(list2.clone(), "list2"), None);
+
+        assert_eq!(map.len(), 2);
+
+        assert_eq!(map.get(&list1), Some(&"list1"));
+        assert_eq!(map.get(&list2), Some(&"list2"));
+
+        assert_eq!(map.remove(&list1), Some("list1"));
+        assert_eq!(map.remove(&list2), Some("list2"));
+
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn test_debug() {
+        let mut list = List::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        let debug_str = format!("{:?}", list);
+        assert_eq!(debug_str, "[1, 2, 3]");
     }
 }
