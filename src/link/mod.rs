@@ -147,6 +147,14 @@ impl<T> List<T> {
             // Continuously pop elements until the list is empty
         }
     }
+
+    pub fn cursor_mut(&mut self) -> CursorMut<T> {
+        CursorMut {
+            cur: self.head,
+            list: self,
+            index: None,
+        }
+    }
 }
 
 impl<'a, T> IntoIterator for &'a List<T> {
@@ -395,6 +403,98 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
 impl<T> ExactSizeIterator for IntoIter<T> {
     fn len(&self) -> usize {
         self.list.len()
+    }
+}
+
+pub struct CursorMut<'a, T> {
+    cur: Link<T>,
+    list: &'a mut List<T>,
+    index: Option<usize>,
+}
+
+impl<'a, T> CursorMut<'a, T> {
+    pub fn index(&self) -> Option<usize> {
+        self.index
+    }
+
+    pub fn move_next(&mut self) {
+        if let Some(cur) = self.cur {
+            self.cur = unsafe { (*cur.as_ptr()).back };
+            if self.cur.is_some() {
+                *self.index.as_mut().unwrap() += 1;
+            } else {
+                self.index = None;
+            }
+        } else if !self.list.is_empty() {
+            self.cur = self.list.head;
+            self.index = Some(0);
+        }
+    }
+
+    pub fn move_prev(&mut self) {
+        if let Some(cur) = self.cur {
+            self.cur = unsafe { (*cur.as_ptr()).front };
+            if self.cur.is_some() {
+                *self.index.as_mut().unwrap() -= 1;
+            } else {
+                self.index = None;
+            }
+        } else if !self.list.is_empty() {
+            self.cur = self.list.tail;
+            self.index = Some(self.list.len - 1);
+        }
+    }
+
+    pub fn current(&mut self) -> Option<&mut T> {
+        self.cur.map(|mut node| unsafe { &mut node.as_mut().elem })
+    }
+
+    pub fn peek_next(&mut self) -> Option<&mut T> {
+        self.cur
+            .and_then(|node| unsafe { (*node.as_ptr()).back })
+            .map(|mut node| unsafe { &mut node.as_mut().elem })
+    }
+
+    pub fn peek_prev(&mut self) -> Option<&mut T> {
+        self.cur
+            .and_then(|node| unsafe { (*node.as_ptr()).back })
+            .map(|mut node| unsafe { &mut node.as_mut().elem })
+    }
+
+    pub fn split_before(&mut self) -> List<T> {
+        if let Some(cur) = self.cur {
+            let old_len = self.list.len();
+            let old_index = self.index.unwrap();
+            let prev = unsafe { (*cur.as_ptr()).front };
+
+            let new_len = old_len - old_index;
+            let new_front = self.cur;
+            let new_index = Some(0);
+
+            let output_len = old_len - new_len;
+            let output_front = self.list.head;
+            let output_back = prev;
+
+            unsafe {
+                if let Some(prev) = prev {
+                    (*cur.as_ptr()).front = None;
+                    (*prev.as_ptr()).back = None;
+                }
+            }
+
+            self.list.len = new_len;
+            self.list.head = new_front;
+            self.index = new_index;
+
+            List {
+                head: output_front,
+                tail: output_back,
+                len: output_len,
+                _marker: std::marker::PhantomData,
+            }
+        } else {
+            std::mem::replace(self.list, List::new())
+        }
     }
 }
 
