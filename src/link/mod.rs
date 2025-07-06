@@ -268,6 +268,15 @@ impl<T: Hash> Hash for List<T> {
     }
 }
 
+unsafe impl<T: Send> Send for List<T> {}
+unsafe impl<T: Sync> Sync for List<T> {}
+
+unsafe impl<'a, T: Send> Send for Iter<'a, T> {}
+unsafe impl<'a, T: Sync> Sync for Iter<'a, T> {}
+
+unsafe impl<'a, T: Send> Send for IterMut<'a, T> {}
+unsafe impl<'a, T: Sync> Sync for IterMut<'a, T> {}
+
 pub struct Iter<'a, T> {
     front: Link<T>,
     back: Link<T>,
@@ -826,5 +835,44 @@ mod tests {
 
         let debug_str = format!("{:?}", list);
         assert_eq!(debug_str, "[1, 2, 3]");
+    }
+
+    #[test]
+    #[allow(dead_code)]
+    fn test_list_send_sync() {
+        fn assert_properties() {
+            fn is_send<T: Send>() {}
+            fn is_sync<T: Sync>() {}
+
+            is_send::<List<i32>>();
+            is_sync::<List<i32>>();
+
+            is_send::<IntoIter<i32>>();
+            is_sync::<IntoIter<i32>>();
+
+            is_send::<Iter<i32>>();
+            is_sync::<Iter<i32>>();
+
+            is_send::<IterMut<i32>>();
+            is_sync::<IterMut<i32>>();
+
+            fn list_covariant<'a, T>(x: List<&'static T>) -> List<&'a T> {
+                x
+            }
+            fn iter_covariant<'i, 'a, T>(x: Iter<'i, &'static T>) -> Iter<'i, &'a T> {
+                x
+            }
+            fn into_iter_covariant<'a, T>(x: IntoIter<&'static T>) -> IntoIter<&'a T> {
+                x
+            }
+
+            /// ```compile_fail,E0308
+            /// use linked_list::IterMut;
+            ///
+            /// fn iter_mut_covariant<'i, 'a, T>(x: IterMut<'i, &'static T>) -> IterMut<'i, &'a T> { x }
+            /// ```
+            fn iter_mut_invariant() {}
+        }
+        assert_properties();
     }
 }
