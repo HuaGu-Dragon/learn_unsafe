@@ -475,6 +475,7 @@ impl<'a, T> CursorMut<'a, T> {
 
             let new_len = old_len - old_index;
             let new_front = self.cur;
+            let new_back = self.list.tail;
             let new_index = Some(0);
 
             let output_len = old_len - new_len;
@@ -490,6 +491,45 @@ impl<'a, T> CursorMut<'a, T> {
 
             self.list.len = new_len;
             self.list.head = new_front;
+            self.list.tail = new_back;
+            self.index = new_index;
+
+            List {
+                head: output_front,
+                tail: output_back,
+                len: output_len,
+                _marker: std::marker::PhantomData,
+            }
+        } else {
+            std::mem::replace(self.list, List::new())
+        }
+    }
+
+    pub fn split_after(&mut self) -> List<T> {
+        if let Some(cur) = self.cur {
+            let old_len = self.list.len;
+            let old_index = self.index.unwrap();
+            let next = unsafe { (*cur.as_ptr()).back };
+
+            let new_len = old_index + 1;
+            let new_back = self.cur;
+            let new_front = self.list.head;
+            let new_index = Some(old_index);
+
+            let output_len = old_len - new_len;
+            let output_front = next;
+            let output_back = self.list.tail;
+
+            unsafe {
+                if let Some(next) = next {
+                    (*cur.as_ptr()).back = None;
+                    (*next.as_ptr()).front = None;
+                }
+            }
+
+            self.list.len = new_len;
+            self.list.head = new_front;
+            self.list.tail = new_back;
             self.index = new_index;
 
             List {
