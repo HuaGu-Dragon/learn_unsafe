@@ -150,7 +150,7 @@ impl<T> List<T> {
 
     pub fn cursor_mut(&mut self) -> CursorMut<T> {
         CursorMut {
-            cur: self.head,
+            cur: None,
             list: self,
             index: None,
         }
@@ -450,15 +450,21 @@ impl<'a, T> CursorMut<'a, T> {
     }
 
     pub fn peek_next(&mut self) -> Option<&mut T> {
-        self.cur
-            .and_then(|node| unsafe { (*node.as_ptr()).back })
-            .map(|mut node| unsafe { &mut node.as_mut().elem })
+        let next = if let Some(cur) = self.cur {
+            unsafe { (*cur.as_ptr()).back }
+        } else {
+            self.list.head
+        };
+        next.map(|mut node| unsafe { &mut node.as_mut().elem })
     }
 
     pub fn peek_prev(&mut self) -> Option<&mut T> {
-        self.cur
-            .and_then(|node| unsafe { (*node.as_ptr()).back })
-            .map(|mut node| unsafe { &mut node.as_mut().elem })
+        let prev = if let Some(prev) = self.cur {
+            unsafe { (*prev.as_ptr()).front }
+        } else {
+            self.list.tail
+        };
+        prev.map(|mut node| unsafe { &mut node.as_mut().elem })
     }
 
     pub fn split_before(&mut self) -> List<T> {
@@ -974,5 +980,22 @@ mod tests {
             fn iter_mut_invariant() {}
         }
         assert_properties();
+    }
+
+    #[test]
+    fn test_cursor_mut() {
+        let mut m: List<u32> = List::new();
+        m.extend([1, 2, 3, 4, 5, 6]);
+        let mut cursor = m.cursor_mut();
+
+        cursor.move_next();
+        assert_eq!(cursor.current(), Some(&mut 1));
+        assert_eq!(cursor.peek_next(), Some(&mut 2));
+        assert_eq!(cursor.peek_prev(), None);
+        assert_eq!(cursor.index(), Some(0));
+
+        cursor.move_prev();
+        assert_eq!(cursor.current(), None);
+        assert_eq!(cursor.peek_next(), Some(&mut 1));
     }
 }
