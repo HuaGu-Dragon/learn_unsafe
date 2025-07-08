@@ -479,7 +479,7 @@ impl<'a, T> CursorMut<'a, T> {
             let new_index = Some(0);
 
             let output_len = old_len - new_len;
-            let output_front = if prev.is_some() { self.list.head } else { None };
+            let output_front = self.list.head.filter(|_| prev.is_some());
             let output_back = prev;
 
             unsafe {
@@ -518,7 +518,7 @@ impl<'a, T> CursorMut<'a, T> {
 
             let output_len = old_len - new_len;
             let output_front = next;
-            let output_back = if next.is_some() { self.list.tail } else { None };
+            let output_back = self.list.tail.filter(|_| next.is_some());
 
             unsafe {
                 if let Some(next) = next {
