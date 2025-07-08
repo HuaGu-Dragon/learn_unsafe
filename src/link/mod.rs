@@ -469,7 +469,7 @@ impl<'a, T> CursorMut<'a, T> {
 
     pub fn split_before(&mut self) -> List<T> {
         if let Some(cur) = self.cur {
-            let old_len = self.list.len();
+            let old_len = self.list.len;
             let old_index = self.index.unwrap();
             let prev = unsafe { (*cur.as_ptr()).front };
 
@@ -479,7 +479,7 @@ impl<'a, T> CursorMut<'a, T> {
             let new_index = Some(0);
 
             let output_len = old_len - new_len;
-            let output_front = self.list.head;
+            let output_front = if prev.is_some() { self.list.head } else { None };
             let output_back = prev;
 
             unsafe {
@@ -518,7 +518,7 @@ impl<'a, T> CursorMut<'a, T> {
 
             let output_len = old_len - new_len;
             let output_front = next;
-            let output_back = self.list.tail;
+            let output_back = if next.is_some() { self.list.tail } else { None };
 
             unsafe {
                 if let Some(next) = next {
