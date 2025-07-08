@@ -479,13 +479,15 @@ impl<'a, T> CursorMut<'a, T> {
             let new_index = Some(0);
 
             let output_len = old_len - new_len;
-            let output_front = self.list.head.filter(|_| prev.is_some());
+            let mut output_front = self.list.head;
             let output_back = prev;
 
             unsafe {
                 if let Some(prev) = prev {
                     (*cur.as_ptr()).front = None;
                     (*prev.as_ptr()).back = None;
+                } else {
+                    output_front = None;
                 }
             }
 
@@ -518,12 +520,14 @@ impl<'a, T> CursorMut<'a, T> {
 
             let output_len = old_len - new_len;
             let output_front = next;
-            let output_back = self.list.tail.filter(|_| next.is_some());
+            let mut output_back = self.list.tail;
 
             unsafe {
                 if let Some(next) = next {
                     (*cur.as_ptr()).back = None;
                     (*next.as_ptr()).front = None;
+                } else {
+                    output_back = None;
                 }
             }
 
