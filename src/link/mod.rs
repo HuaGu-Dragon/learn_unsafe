@@ -546,6 +546,80 @@ impl<'a, T> CursorMut<'a, T> {
             std::mem::replace(self.list, List::new())
         }
     }
+
+    fn splice_before(&mut self, mut input: List<T>) {
+        if input.is_empty() {
+            return;
+        } else if let Some(cur) = self.cur {
+            let input_head = input.head.take().unwrap();
+            let input_tail = input.tail.take().unwrap();
+            if let Some(prev) = unsafe { (*cur.as_ptr()).front } {
+                unsafe {
+                    (*prev.as_ptr()).back = Some(input_head);
+                    (*input_head.as_ptr()).front = Some(prev);
+                    (*cur.as_ptr()).front = Some(input_tail);
+                    (*input_tail.as_ptr()).back = Some(cur);
+                };
+            } else {
+                unsafe {
+                    (*cur.as_ptr()).front = Some(input_tail);
+                    (*input_tail.as_ptr()).back = Some(cur);
+                    self.list.head = Some(input_head);
+                }
+            }
+            *self.index.as_mut().unwrap() += input.len;
+        } else if let Some(back) = self.list.tail {
+            let input_head = input.head.take().unwrap();
+            let input_tail = input.tail.take().unwrap();
+            unsafe {
+                (*back.as_ptr()).back = Some(input_head);
+                (*input_head.as_ptr()).front = Some(back);
+                self.list.tail = Some(input_tail);
+            }
+        } else {
+            std::mem::swap(self.list, &mut input);
+        }
+
+        self.list.len += input.len;
+        input.len = 0;
+    }
+
+    fn splice_after(&mut self, mut input: List<T>) {
+        if input.is_empty() {
+            return;
+        } else if let Some(cur) = self.cur {
+            let input_head = input.head.take().unwrap();
+            let input_tail = input.tail.take().unwrap();
+            if let Some(next) = unsafe { (*cur.as_ptr()).back } {
+                unsafe {
+                    (*next.as_ptr()).front = Some(input_tail);
+                    (*input_tail.as_ptr()).back = Some(next);
+                    (*cur.as_ptr()).back = Some(input_head);
+                    (*input_head.as_ptr()).front = Some(cur);
+                };
+            } else {
+                unsafe {
+                    (*cur.as_ptr()).back = Some(input_head);
+                    (*input_head.as_ptr()).front = Some(cur);
+                    self.list.tail = Some(input_tail);
+                }
+            }
+            *self.index.as_mut().unwrap() += input.len;
+        } else if let Some(front) = self.list.head {
+            let input_head = input.head.take().unwrap();
+            let input_tail = input.tail.take().unwrap();
+            unsafe {
+                (*front.as_ptr()).front = Some(input_tail);
+                (*input_tail.as_ptr()).back = Some(front);
+                self.list.head = Some(input_head);
+            }
+        } else {
+            std::mem::swap(self.list, &mut input);
+        }
+
+        self.list.len += input.len;
+        input.len = 0;
+    }
 }
 
 #[cfg(test)]
