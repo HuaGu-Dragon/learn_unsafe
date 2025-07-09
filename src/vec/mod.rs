@@ -117,7 +117,7 @@ impl<T> RawValIter<T> {
             start: slice.as_ptr(),
             end: if std::mem::size_of::<T>() == 0 {
                 ((slice.as_ptr()) as usize + slice.len()) as *const T // For zero-sized types, we use the size of the slice
-            } else if slice.len() == 0 {
+            } else if slice.is_empty() {
                 slice.as_ptr()
             } else {
                 unsafe { slice.as_ptr().add(slice.len()) }
@@ -165,7 +165,7 @@ impl<T> Vec<T> {
     }
 
     pub fn drain(&mut self) -> Drain<T> {
-        let iter = unsafe { RawValIter::new(&self) };
+        let iter = unsafe { RawValIter::new(self) };
         self.len = 0; // Reset length to 0, as Drain will consume the elements
         Drain {
             vec: PhantomData,
@@ -210,15 +210,13 @@ impl<T> Iterator for RawValIter<T> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.start == self.end {
             None
+        } else if std::mem::size_of::<T>() == 0 {
+            self.start = (self.start as usize + 1) as *const T; // For zero-sized types, we use the size of the slice
+            unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
         } else {
-            if std::mem::size_of::<T>() == 0 {
-                self.start = (self.start as usize + 1) as *const T; // For zero-sized types, we use the size of the slice
-                unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
-            } else {
-                let ptr = self.start; // Save the current pointer
-                self.start = unsafe { self.start.add(1) };
-                unsafe { Some(std::ptr::read(ptr)) }
-            }
+            let ptr = self.start; // Save the current pointer
+            self.start = unsafe { self.start.add(1) };
+            unsafe { Some(std::ptr::read(ptr)) }
         }
     }
 
@@ -234,14 +232,12 @@ impl<T> DoubleEndedIterator for RawValIter<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.start == self.end {
             None
+        } else if std::mem::size_of::<T>() == 0 {
+            self.end = (self.end as usize - 1) as *const T; // For zero-sized types, we use the size of the slice
+            unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
         } else {
-            if std::mem::size_of::<T>() == 0 {
-                self.end = (self.end as usize - 1) as *const T; // For zero-sized types, we use the size of the slice
-                unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
-            } else {
-                self.end = unsafe { self.end.sub(1) };
-                unsafe { Some(std::ptr::read(self.end)) }
-            }
+            self.end = unsafe { self.end.sub(1) };
+            unsafe { Some(std::ptr::read(self.end)) }
         }
     }
 }
@@ -333,8 +329,8 @@ impl<T> Drop for Vec<T> {
 
 impl<'a, T> Drop for Drain<'a, T> {
     fn drop(&mut self) {
-        while let Some(_) = self.iter.next() {
-            // Just consume the iterator to drop elements
+        for _ in self.iter.by_ref() {
+            // This is to ensure that the elements are dropped
         }
     }
 }
@@ -342,8 +338,8 @@ impl<'a, T> Drop for Drain<'a, T> {
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
         // Drop each element in the iterator
-        while let Some(_) = self.iter.next() {
-            // Just consume the iterator to drop elements
+        for _ in self.iter.by_ref() {
+            // This is to ensure that the elements are dropped
         }
     }
 }
@@ -351,7 +347,7 @@ impl<T> Drop for IntoIter<T> {
 mod tests {
 
     #![allow(unused_imports)]
-    use std::{isize, mem};
+    use std::mem;
 
     use super::*;
 

@@ -73,14 +73,6 @@ impl<T: ?Sized> Box<T> {
         ptr
     }
 
-    pub fn as_ref(&self) -> &T {
-        &**self
-    }
-
-    pub fn as_mut(&mut self) -> &mut T {
-        &mut **self
-    }
-
     pub fn as_ptr(&self) -> *const T {
         self.inner.as_ptr()
     }
@@ -98,13 +90,13 @@ impl<T> From<T> for Box<T> {
 
 impl<T> AsRef<T> for Box<T> {
     fn as_ref(&self) -> &T {
-        &**self
+        self
     }
 }
 
 impl<T> AsMut<T> for Box<T> {
     fn as_mut(&mut self) -> &mut T {
-        &mut **self
+        self
     }
 }
 

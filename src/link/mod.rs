@@ -130,25 +130,21 @@ impl<T> List<T> {
         self.len
     }
 
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         self.into_iter()
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         self.into_iter()
-    }
-
-    pub fn into_iter(self) -> IntoIter<T> {
-        IntoIter { list: self }
     }
 
     pub fn clear(&mut self) {
-        while let Some(_) = self.pop_front() {
+        while self.pop_front().is_some() {
             // Continuously pop elements until the list is empty
         }
     }
 
-    pub fn cursor_mut(&mut self) -> CursorMut<T> {
+    pub fn cursor_mut(&mut self) -> CursorMut<'_, T> {
         CursorMut {
             cur: None,
             list: self,
@@ -193,13 +189,13 @@ impl<T> IntoIterator for List<T> {
     type IntoIter = IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.into_iter()
+        IntoIter { list: self }
     }
 }
 
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
-        while let Some(_) = self.pop_front() {
+        while self.pop_front().is_some() {
             // Continuously pop elements until the list is empty
         }
     }
@@ -246,10 +242,6 @@ impl<T: Debug> Debug for List<T> {
 impl<T: PartialEq> PartialEq for List<T> {
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.len() != other.len() || !self.iter().eq(other.iter())
     }
 }
 
@@ -412,6 +404,7 @@ pub struct CursorMut<'a, T> {
     index: Option<usize>,
 }
 
+#[allow(dead_code)]
 impl<'a, T> CursorMut<'a, T> {
     pub fn index(&self) -> Option<usize> {
         self.index
@@ -503,7 +496,7 @@ impl<'a, T> CursorMut<'a, T> {
                 _marker: std::marker::PhantomData,
             }
         } else {
-            std::mem::replace(self.list, List::new())
+            std::mem::take(self.list)
         }
     }
 
@@ -543,7 +536,7 @@ impl<'a, T> CursorMut<'a, T> {
                 _marker: std::marker::PhantomData,
             }
         } else {
-            std::mem::replace(self.list, List::new())
+            std::mem::take(self.list)
         }
     }
 
