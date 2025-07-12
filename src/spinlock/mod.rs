@@ -16,7 +16,7 @@ pub struct SpinLockGuard<'a, T> {
 }
 
 impl<'a, T> SpinLockGuard<'a, T> {
-    pub fn new(lock: &'a SpinLock<T>) -> Self {
+    fn new(lock: &'a SpinLock<T>) -> Self {
         // SAFETY: The lock must be held when creating a guard
         // This ensures that we have exclusive access to the data
         SpinLockGuard { lock }
