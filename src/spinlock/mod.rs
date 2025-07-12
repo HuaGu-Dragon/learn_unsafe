@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{
     cell::UnsafeCell,
     ops::{Deref, DerefMut},
