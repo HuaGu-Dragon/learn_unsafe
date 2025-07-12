@@ -2,12 +2,46 @@
 
 use std::{
     cell::UnsafeCell,
+    ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
 };
 
 pub struct SpinLock<T> {
     locked: AtomicBool,
     data: UnsafeCell<T>,
+}
+
+pub struct SpinLockGuard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<'a, T> SpinLockGuard<'a, T> {
+    pub fn new(lock: &'a SpinLock<T>) -> Self {
+        // SAFETY: The lock must be held when creating a guard
+        // This ensures that we have exclusive access to the data
+        SpinLockGuard { lock }
+    }
+}
+
+impl<T> Drop for SpinLockGuard<'_, T> {
+    fn drop(&mut self) {
+        // When the guard is dropped, we release the lock
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+impl<T> Deref for SpinLockGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.lock.data.get() }
+    }
+}
+
+impl<T> DerefMut for SpinLockGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.lock.data.get() }
+    }
 }
 
 impl<T> SpinLock<T> {
@@ -18,7 +52,7 @@ impl<T> SpinLock<T> {
         }
     }
 
-    pub fn lock(&self) -> &mut T {
+    pub fn lock(&self) -> SpinLockGuard<'_, T> {
         while self
             .locked
             .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -27,11 +61,7 @@ impl<T> SpinLock<T> {
             std::hint::spin_loop();
         }
         // SAFETY: We have exclusive access to the data while the lock is held
-        unsafe { self.data.get().as_mut().unwrap() }
-    }
-
-    pub fn unlock(&self) {
-        self.locked.store(false, Ordering::Release);
+        SpinLockGuard::new(self)
     }
 }
 
@@ -46,19 +76,20 @@ mod tests {
     fn spinlock_single_threaded() {
         let lock = SpinLock::new(vec![]);
 
-        let data = lock.lock();
-        data.push(1);
-        lock.unlock();
+        {
+            let mut data = lock.lock();
+            data.push(1);
+        }
 
-        let data = lock.lock();
-        data.push(2);
-        lock.unlock();
+        {
+            let mut data = lock.lock();
+            data.push(2);
+        }
 
         let data = lock.lock();
         assert_eq!(data.len(), 2);
         assert_eq!(data[0], 1);
         assert_eq!(data[1], 2);
-        lock.unlock();
     }
 
     #[test]
@@ -69,19 +100,16 @@ mod tests {
 
         thread::scope(|s| {
             s.spawn(|| {
-                let data = lock.lock();
+                let mut data = lock.lock();
                 data.push(1);
-                lock.unlock();
             });
             thread::sleep(std::time::Duration::from_millis(100));
-            let data = lock.lock();
+            let mut data = lock.lock();
             data.push(2);
-            lock.unlock();
         });
-        let data = lock.lock();
+        let mut data = lock.lock();
         data.push(3);
         assert_eq!(data.len(), 3);
         assert_eq!(data.iter().sum::<i32>(), 6);
-        lock.unlock();
     }
 }
