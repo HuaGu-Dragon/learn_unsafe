@@ -52,13 +52,30 @@ impl<T> SpinLock<T> {
         }
     }
 
+    pub fn try_lock(&self) -> Option<SpinLockGuard<'_, T>> {
+        if self
+            .locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            Some(SpinLockGuard::new(self))
+        } else {
+            None
+        }
+    }
+
     pub fn lock(&self) -> SpinLockGuard<'_, T> {
+        while self.locked.load(Ordering::Relaxed) {
+            std::hint::spin_loop();
+        }
         while self
             .locked
             .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
-            std::hint::spin_loop();
+            while self.locked.load(Ordering::Relaxed) {
+                std::hint::spin_loop();
+            }
         }
         // SAFETY: We have exclusive access to the data while the lock is held
         SpinLockGuard::new(self)
