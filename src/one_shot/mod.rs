@@ -7,6 +7,7 @@ use std::{
 pub struct Channel<T> {
     message: UnsafeCell<MaybeUninit<T>>,
     ready: AtomicBool,
+    used: AtomicBool,
 }
 
 impl<T> Channel<T> {
@@ -14,6 +15,7 @@ impl<T> Channel<T> {
         Self {
             message: UnsafeCell::new(MaybeUninit::uninit()),
             ready: AtomicBool::new(false),
+            used: AtomicBool::new(false),
         }
     }
 
@@ -21,6 +23,9 @@ impl<T> Channel<T> {
     /// and that no other thread is sending a message at the same time.
     /// Only call it once.
     pub unsafe fn send(&self, message: T) {
+        if self.used.swap(true, Ordering::Relaxed) {
+            panic!("Channel is already in use");
+        }
         unsafe {
             (*self.message.get()).write(message);
         }
@@ -34,6 +39,9 @@ impl<T> Channel<T> {
     /// Only call this if `is_ready` is true
     /// SAFETY: Caller must ensure that the channel is ready
     pub unsafe fn recv(&self) -> T {
+        if !self.ready.swap(false, Ordering::Acquire) {
+            panic!("Channel is not ready");
+        }
         unsafe { (*self.message.get()).assume_init_read() }
     }
 }
