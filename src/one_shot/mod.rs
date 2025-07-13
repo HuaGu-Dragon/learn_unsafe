@@ -49,6 +49,17 @@ impl<T> Channel<T> {
 unsafe impl<T: Send> Send for Channel<T> {}
 unsafe impl<T: Send> Sync for Channel<T> {}
 
+impl<T> Drop for Channel<T> {
+    fn drop(&mut self) {
+        if *self.ready.get_mut() {
+            // SAFETY: We are dropping the channel, so we can safely assume the message is ready
+            unsafe {
+                (*self.message.get()).assume_init_drop();
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{thread::sleep, time::Duration};
