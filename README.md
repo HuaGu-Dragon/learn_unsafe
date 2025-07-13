@@ -5,5 +5,6 @@
 * [x] unsafe Link_list
 * [x] unsafe Box
 * [x] unsafe Arc
-* [ ] unsafe Spinlock
+* [x] unsafe Spinlock
+* [ ] unsafe One_shot
 * [ ] unsafe Mutex
