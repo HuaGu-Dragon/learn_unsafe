@@ -1,17 +1,18 @@
 use std::{
     cell::UnsafeCell,
+    mem::MaybeUninit,
     sync::atomic::{AtomicBool, Ordering},
 };
 
 pub struct Channel<T> {
-    message: UnsafeCell<Option<T>>,
+    message: UnsafeCell<MaybeUninit<T>>,
     ready: AtomicBool,
 }
 
 impl<T> Channel<T> {
     pub fn new() -> Self {
         Self {
-            message: UnsafeCell::new(None),
+            message: UnsafeCell::new(MaybeUninit::uninit()),
             ready: AtomicBool::new(false),
         }
     }
@@ -21,7 +22,7 @@ impl<T> Channel<T> {
     /// Only call it once.
     pub unsafe fn send(&self, message: T) {
         unsafe {
-            self.message.get().write(Some(message));
+            (*self.message.get()).write(message);
         }
         self.ready.store(true, Ordering::Release);
     }
@@ -33,7 +34,7 @@ impl<T> Channel<T> {
     /// Only call this if `is_ready` is true
     /// SAFETY: Caller must ensure that the channel is ready
     pub unsafe fn recv(&self) -> T {
-        unsafe { self.message.get().read().expect("No message available") }
+        unsafe { (*self.message.get()).assume_init_read() }
     }
 }
 
