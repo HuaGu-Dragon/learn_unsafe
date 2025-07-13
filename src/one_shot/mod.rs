@@ -1,10 +1,7 @@
 use std::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 pub struct Channel<T> {
@@ -12,11 +9,25 @@ pub struct Channel<T> {
     ready: AtomicBool,
 }
 
-pub struct Sender<T> {
-    channel: Arc<Channel<T>>,
+impl<T> Channel<T> {
+    pub const fn new() -> Self {
+        Self {
+            message: UnsafeCell::new(MaybeUninit::uninit()),
+            ready: AtomicBool::new(false),
+        }
+    }
+
+    pub fn split(&mut self) -> (Sender<'_, T>, Receiver<'_, T>) {
+        *self = Self::new();
+        (Sender { channel: self }, Receiver { channel: self })
+    }
 }
 
-impl<T> Sender<T> {
+pub struct Sender<'a, T> {
+    channel: &'a Channel<T>,
+}
+
+impl<'a, T> Sender<'a, T> {
     pub fn send(self, message: T) {
         unsafe {
             (*self.channel.message.get()).write(message);
@@ -25,11 +36,11 @@ impl<T> Sender<T> {
     }
 }
 
-pub struct Receiver<T> {
-    channel: Arc<Channel<T>>,
+pub struct Receiver<'a, T> {
+    channel: &'a Channel<T>,
 }
 
-impl<T> Receiver<T> {
+impl<'a, T> Receiver<'a, T> {
     pub fn is_ready(&self) -> bool {
         self.channel.ready.load(Ordering::Relaxed)
     }
@@ -40,25 +51,6 @@ impl<T> Receiver<T> {
         unsafe {
             // SAFETY: We assume the message is ready to be read
             (*self.channel.message.get()).assume_init_read()
-        }
-    }
-}
-
-pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-    let channel = Arc::new(Channel::new());
-    (
-        Sender {
-            channel: channel.clone(),
-        },
-        Receiver { channel },
-    )
-}
-
-impl<T> Channel<T> {
-    pub fn new() -> Self {
-        Self {
-            message: UnsafeCell::new(MaybeUninit::uninit()),
-            ready: AtomicBool::new(false),
         }
     }
 }
@@ -85,7 +77,8 @@ mod tests {
 
     #[test]
     fn test_channel_single_thread() {
-        let (sender, receiver) = channel();
+        let mut channel = Channel::new();
+        let (sender, receiver) = channel.split();
 
         sender.send(42);
         assert!(receiver.is_ready());
@@ -98,7 +91,8 @@ mod tests {
     fn test_channel_multi_thread() {
         use std::thread;
 
-        let (sender, receiver) = channel();
+        let mut channel = Channel::new();
+        let (sender, receiver) = channel.split();
 
         thread::scope(|s| {
             s.spawn(move || {
