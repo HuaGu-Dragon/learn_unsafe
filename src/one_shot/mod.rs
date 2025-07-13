@@ -1,35 +1,89 @@
 use std::{
-    collections::VecDeque,
-    sync::{Condvar, Mutex},
+    cell::UnsafeCell,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 pub struct Channel<T> {
-    queue: Mutex<VecDeque<T>>,
-    ready: Condvar,
+    message: UnsafeCell<Option<T>>,
+    ready: AtomicBool,
 }
 
 impl<T> Channel<T> {
     pub fn new() -> Self {
         Self {
-            queue: Mutex::new(VecDeque::new()),
-            ready: Condvar::new(),
+            message: UnsafeCell::new(None),
+            ready: AtomicBool::new(false),
         }
     }
 
-    pub fn send(&self, message: T) {
-        self.queue.lock().unwrap().push_back(message);
-        // Notify one waiting receiver that a message is available
-        self.ready.notify_one();
+    /// SAFETY: Caller must ensure that the channel is not ready
+    /// and that no other thread is sending a message at the same time.
+    /// Only call it once.
+    pub unsafe fn send(&self, message: T) {
+        unsafe {
+            self.message.get().write(Some(message));
+        }
+        self.ready.store(true, Ordering::Release);
     }
 
-    pub fn recv(&self) -> T {
-        let mut queue = self.queue.lock().unwrap();
-        // Wait until there is a message to receive
-        loop {
-            if let Some(message) = queue.pop_front() {
-                return message;
+    pub fn is_ready(&self) -> bool {
+        self.ready.load(Ordering::Acquire)
+    }
+
+    /// Only call this if `is_ready` is true
+    /// SAFETY: Caller must ensure that the channel is ready
+    pub unsafe fn recv(&self) -> T {
+        unsafe { self.message.get().read().expect("No message available") }
+    }
+}
+
+unsafe impl<T: Send> Send for Channel<T> {}
+unsafe impl<T: Send> Sync for Channel<T> {}
+
+#[cfg(test)]
+mod tests {
+    use std::{thread::sleep, time::Duration};
+
+    use super::*;
+
+    #[test]
+    fn test_channel_single_thread() {
+        let channel = Channel::new();
+
+        // Test sending a message
+        unsafe {
+            channel.send(42);
+        }
+
+        // Test receiving a message
+        unsafe {
+            assert!(channel.is_ready());
+            let message = channel.recv();
+            assert_eq!(message, 42);
+        }
+    }
+
+    #[test]
+    fn test_channel_multi_thread() {
+        use std::thread;
+
+        let channel = Channel::new();
+
+        thread::scope(|s| {
+            s.spawn(|| {
+                sleep(Duration::from_millis(100));
+                unsafe {
+                    channel.send(100);
+                }
+            });
+
+            loop {
+                if channel.is_ready() {
+                    let res = unsafe { channel.recv() };
+                    assert_eq!(res, 100);
+                    break;
+                }
             }
-            queue = self.ready.wait(queue).unwrap();
-        }
+        });
     }
 }
