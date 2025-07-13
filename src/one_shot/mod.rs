@@ -2,6 +2,7 @@ use std::{
     cell::UnsafeCell,
     mem::MaybeUninit,
     sync::atomic::{AtomicBool, Ordering},
+    thread::Thread,
 };
 
 pub struct Channel<T> {
@@ -19,12 +20,24 @@ impl<T> Channel<T> {
 
     pub fn split(&mut self) -> (Sender<'_, T>, Receiver<'_, T>) {
         *self = Self::new();
-        (Sender { channel: self }, Receiver { channel: self })
+        (
+            Sender {
+                channel: self,
+                // Capture the current thread to ensure the sender can send messages
+                // This is necessary to ensure the sender can wake up the receiver
+                receiving_thread: std::thread::current(),
+            },
+            Receiver {
+                channel: self,
+                _send_marker: std::marker::PhantomData,
+            },
+        )
     }
 }
 
 pub struct Sender<'a, T> {
     channel: &'a Channel<T>,
+    receiving_thread: Thread,
 }
 
 impl<'a, T> Sender<'a, T> {
@@ -33,20 +46,20 @@ impl<'a, T> Sender<'a, T> {
             (*self.channel.message.get()).write(message);
         }
         self.channel.ready.store(true, Ordering::Release);
+        Thread::unpark(&self.receiving_thread);
     }
 }
 
 pub struct Receiver<'a, T> {
     channel: &'a Channel<T>,
+    // Use a marker to ensure the receiver does not send to other threads
+    _send_marker: std::marker::PhantomData<*const ()>,
 }
 
-impl<'a, T> Receiver<'a, T> {
-    pub fn is_ready(&self) -> bool {
-        self.channel.ready.load(Ordering::Relaxed)
-    }
+impl<T> Receiver<'_, T> {
     pub fn recv(self) -> T {
-        if !self.channel.ready.swap(false, Ordering::Release) {
-            panic!("Only single message allowed");
+        if !self.channel.ready.swap(false, Ordering::Acquire) {
+            std::thread::park();
         };
         unsafe {
             // SAFETY: We assume the message is ready to be read
@@ -81,7 +94,6 @@ mod tests {
         let (sender, receiver) = channel.split();
 
         sender.send(42);
-        assert!(receiver.is_ready());
 
         let res = receiver.recv();
         assert_eq!(res, 42);
@@ -99,12 +111,7 @@ mod tests {
                 sleep(Duration::from_millis(100));
                 sender.send(42);
             });
-            loop {
-                if receiver.is_ready() {
-                    assert_eq!(receiver.recv(), 42);
-                    break;
-                }
-            }
+            assert_eq!(receiver.recv(), 42);
         });
     }
 }
