@@ -26,10 +26,23 @@ impl<T> Mutex<T> {
     }
 
     pub fn lock(&self) -> MutexGuard<'_, T> {
-        while self.locked.swap(1, Ordering::Acquire) == 1 {
-            wait(&self.locked, 1);
-        }
+        lock_contended(&self.locked);
         MutexGuard { lock: self }
+    }
+}
+
+fn lock_contended(state: &AtomicU32) {
+    let mut spin_count = 0;
+    while let Err(e) = state.compare_exchange_weak(0, 1, Ordering::Acquire, Ordering::Relaxed) {
+        if e == 1 {
+            if spin_count < 100 {
+                spin_count += 1;
+                std::hint::spin_loop();
+                continue;
+            }
+            _ = state.compare_exchange_weak(1, 2, Ordering::Acquire, Ordering::Relaxed);
+        }
+        wait(state, 2);
     }
 }
 
@@ -49,8 +62,9 @@ impl<T> DerefMut for MutexGuard<'_, T> {
 
 impl<T> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
-        self.lock.locked.store(0, Ordering::Release);
-        wake_one(&self.lock.locked);
+        if self.lock.locked.swap(0, Ordering::Release) == 2 {
+            wake_one(&self.lock.locked);
+        }
     }
 }
 
