@@ -7,4 +7,4 @@
 * [x] unsafe Arc
 * [x] unsafe Spinlock
 * [x] unsafe One_shot
-* [ ] unsafe Mutex
+* [x] unsafe Mutex
