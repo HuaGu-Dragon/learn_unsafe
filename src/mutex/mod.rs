@@ -13,6 +13,7 @@ pub struct Mutex<T> {
 
 pub struct MutexGuard<'a, T> {
     lock: &'a Mutex<T>,
+    _marker: std::marker::PhantomData<*mut T>,
 }
 
 unsafe impl<T: Send> Sync for Mutex<T> {}
@@ -27,22 +28,26 @@ impl<T> Mutex<T> {
 
     pub fn lock(&self) -> MutexGuard<'_, T> {
         lock_contended(&self.locked);
-        MutexGuard { lock: self }
+        MutexGuard {
+            lock: self,
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
 fn lock_contended(state: &AtomicU32) {
     let mut spin_count = 0;
-    while let Err(e) = state.compare_exchange_weak(0, 1, Ordering::Acquire, Ordering::Relaxed) {
-        if e == 1 {
+    if state
+        .compare_exchange(0, 1, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        while state.swap(2, Ordering::Acquire) != 0 {
             if spin_count < 100 {
                 spin_count += 1;
                 std::hint::spin_loop();
-                continue;
             }
-            _ = state.compare_exchange_weak(1, 2, Ordering::Acquire, Ordering::Relaxed);
+            wait(state, 2);
         }
-        wait(state, 2);
     }
 }
 
@@ -102,5 +107,23 @@ mod tests {
         });
         let guard = mutex.lock();
         assert_eq!(*guard, 3); // Check the final value
+    }
+
+    #[test]
+    fn test_mutex_high_pressure() {
+        let mutex = Mutex::new(0);
+
+        std::thread::scope(|s| {
+            for _ in 0..100 {
+                s.spawn(|| {
+                    for _ in 0..100000 {
+                        let mut guard = mutex.lock();
+                        *guard += 1; // Increment the value
+                    }
+                });
+            }
+        });
+        let guard = mutex.lock();
+        assert_eq!(*guard, 10000000); // Check the final value after high contention
     }
 }
