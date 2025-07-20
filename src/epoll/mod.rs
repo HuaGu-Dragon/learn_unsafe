@@ -134,11 +134,11 @@ pub struct Register {
 }
 
 impl Register {
-    pub fn register(&self, source: TcpStream, interests: u32) -> Result<()> {
+    pub fn register(&self, source: &TcpStream, interests: u32, token: usize) -> Result<()> {
         let mut event = EpollEvent {
             events: interests,
             data: EpollData {
-                fd: source.as_raw_fd(),
+                ptr: token as *mut c_void,
             },
         };
         let res =
@@ -164,9 +164,9 @@ impl Drop for Register {
 #[cfg(test)]
 mod test {
     use std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         ffi::CStr,
-        io::{BufRead, BufReader, Write},
+        io::{BufRead, BufReader, ErrorKind, Read, Write},
         net::TcpStream,
         os::fd::AsRawFd,
     };
@@ -237,5 +237,106 @@ mod test {
             }
             ffi::close(fd);
         }
+    }
+
+    fn get_req(path: &str) -> String {
+        format!(
+            "GET {path} HTTP/1.1\r\n\
+             Host: localhost\r\n\
+             Connection: close\r\n\
+             \r\n"
+        )
+    }
+
+    fn handle_events_fn(
+        events: &mut Vec<EpollEvent>,
+        streams: &mut Vec<TcpStream>,
+        handled: &mut HashSet<usize>,
+    ) -> Result<usize> {
+        let mut handled_events = 0;
+        for event in events {
+            unsafe {
+                let index = event.data.ptr as usize;
+
+                let mut buf = [0u8; 1024]; // buffer to read data into
+
+                loop {
+                    match streams[index as usize].read(&mut buf) {
+                        Ok(n) if n == 0 => {
+                            // FIX #4
+                            // `insert` returns false if the value already existed in the set.
+                            if !handled.insert(index) {
+                                break;
+                            }
+                            handled_events += 1;
+                            println!("received: {}", String::from_utf8_lossy(&buf));
+                            break;
+                        }
+                        Ok(n) => {
+                            let txt = String::from_utf8_lossy(&buf[..n]);
+
+                            println!("RECEIVED: {:?}", event);
+                            println!("{txt}\n------\n");
+                        }
+                        Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                            println!("block");
+                            break;
+                        }
+                        // this was not in the book example, but it's a error condition
+                        // you probably want to handle in some way (either by breaking
+                        // out of the loop or trying a new read call immediately)
+                        Err(e) if e.kind() == ErrorKind::Interrupted => {
+                            println!("interrupted");
+                            break;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+            }
+        }
+        Ok(handled_events)
+    }
+
+    #[test]
+    fn test_epoll() {
+        let mut epoll = Poll::new().expect("Failed to create epoll instance");
+        let events_len = 10;
+
+        let mut streams = vec![];
+
+        let addr = "127.0.0.1:8080";
+
+        for i in 0..events_len {
+            let delay = 10000 - i * 1000;
+            let url = format!("/{delay}/request_{i}");
+            let request = get_req(&url);
+            let mut stream = TcpStream::connect(addr).expect("Failed to connect to server");
+            stream
+                .set_nonblocking(true)
+                .expect("Failed to set non-blocking mode");
+            stream
+                .write_all(request.as_bytes())
+                .expect("Failed to write to TCP stream");
+            epoll
+                .register()
+                .register(&stream, EPOLLIN | EPOLLET, i)
+                .expect("Failed to register stream with epoll");
+
+            streams.push(stream);
+        }
+
+        let mut handled = HashSet::new();
+        let mut handle_events = 0;
+        while handle_events < events_len {
+            let mut events = Vec::with_capacity(events_len);
+            epoll.poll(&mut events, None).expect("Failed to poll epoll");
+
+            handle_events += handle_events_fn(&mut events, &mut streams, &mut handled).unwrap();
+        }
+
+        assert_eq!(
+            events_len, handle_events,
+            "Number of streams should match number of events"
+        );
     }
 }
