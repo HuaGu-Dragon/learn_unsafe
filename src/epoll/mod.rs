@@ -101,6 +101,34 @@ pub struct Poll {
     register: Register,
 }
 
+impl Poll {
+    pub fn new() -> Result<Self> {
+        let fd = unsafe { ffi::epoll_create(1) };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(Self {
+            register: Register { fd },
+        })
+    }
+
+    pub fn register(&self) -> &Register {
+        &self.register
+    }
+
+    pub fn poll(&mut self, events: &mut Vec<EpollEvent>, timeout: Option<c_int>) -> Result<()> {
+        let fd = self.register.fd;
+        let timeout = timeout.unwrap_or(-1);
+        let res =
+            unsafe { ffi::epoll_wait(fd, events.as_mut_ptr(), events.capacity() as i32, timeout) };
+        if res < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        unsafe { events.set_len(res as usize) };
+        Ok(())
+    }
+}
+
 pub struct Register {
     fd: c_int,
 }
