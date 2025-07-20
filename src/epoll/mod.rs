@@ -1,7 +1,14 @@
 #![cfg(target_os = "linux")]
 #![allow(dead_code)]
 
-use std::os::raw::{c_int, c_void};
+use std::{
+    io::Result,
+    net::TcpStream,
+    os::{
+        fd::AsRawFd,
+        raw::{c_int, c_void},
+    },
+};
 
 #[repr(C)]
 #[cfg_attr(target_arch = "x86_64", repr(packed))]
@@ -88,6 +95,42 @@ mod ffi {
 
 pub struct Epoll {
     fd: c_int,
+}
+
+pub struct Poll {
+    register: Register,
+}
+
+pub struct Register {
+    fd: c_int,
+}
+
+impl Register {
+    pub fn register(&self, source: TcpStream, interests: u32) -> Result<()> {
+        let mut event = EpollEvent {
+            events: interests,
+            data: EpollData {
+                fd: source.as_raw_fd(),
+            },
+        };
+        let res =
+            unsafe { ffi::epoll_ctl(self.fd, EPOLL_CTL_ADD, source.as_raw_fd(), &raw mut event) };
+        if res < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+}
+
+impl Drop for Register {
+    fn drop(&mut self) {
+        let res = unsafe { ffi::close(self.fd) };
+
+        if res < 0 {
+            let err = std::io::Error::last_os_error();
+            println!("Failed to close epoll fd: {}", err);
+        }
+    }
 }
 
 #[cfg(test)]
