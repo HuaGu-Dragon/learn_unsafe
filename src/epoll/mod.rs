@@ -215,6 +215,8 @@ mod test {
                 let tcp = streams.get_mut(&fd).expect("Failed to get TCP stream");
                 let mut reader = BufReader::new(tcp);
                 loop {
+                    // Here is a interruption operation
+                    // If the stream is not ready, it will block until data is available
                     match reader.read_until(0, &mut buf) {
                         Ok(_) => break,
                         // Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -340,3 +342,27 @@ mod test {
         );
     }
 }
+/***
+ * My Server code:
+ *
+ * use axum::{Router, routing::get};
+ * use tokio::{net::TcpListener, time::sleep};
+ *
+ * #[tokio::main]
+ * async fn main() {
+ *     let app = Router::new().route("/{delay}/request_{i}", get(handle_request));
+ *     let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+ *     axum::serve(listener, app).await.unwrap();
+ * }
+ *
+ * async fn handle_request(
+ *     axum::extract::Path((delay, i)): axum::extract::Path<(usize, usize)>,
+ * ) -> String {
+ *     println!("Received request with delay: {}, index: {}", delay, i);
+ *     sleep(std::time::Duration::from_millis(delay as u64)).await;
+ *     println!("sending response for delay: {}, index: {}", delay, i);
+ *     format!("Delay: {}, Request: {}", delay, i)
+ * }
+ *
+ *
+ */
