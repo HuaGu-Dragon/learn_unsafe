@@ -12,7 +12,7 @@ pub struct Mutex<T> {
 }
 
 pub struct MutexGuard<'a, T> {
-    lock: &'a Mutex<T>,
+    pub(crate) lock: &'a Mutex<T>,
     _marker: std::marker::PhantomData<*mut T>,
 }
 
