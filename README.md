@@ -8,5 +8,6 @@
 * [x] unsafe Spinlock
 * [x] unsafe One_shot
 * [x] unsafe Mutex
-* [ ] unsafe Condvar
+* [x] unsafe Condvar
+* [ ] unsafe RwLock
 * [x] epoll
