@@ -91,7 +91,7 @@ impl<T> RwLock<T> {
 
 impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
-        if self.lock.state.fetch_sub(1, Ordering::Relaxed) == 1 {
+        if self.lock.state.fetch_sub(1, Ordering::Release) == 1 {
             wake_one(&self.lock.state);
         }
     }
