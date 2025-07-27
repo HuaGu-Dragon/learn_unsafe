@@ -5,5 +5,6 @@ pub mod epoll;
 pub mod link;
 pub mod mutex;
 pub mod one_shot;
+pub mod rw_lock;
 pub mod spinlock;
 pub mod vec;
