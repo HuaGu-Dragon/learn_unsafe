@@ -9,6 +9,7 @@ use atomic_wait::{wait, wake_all, wake_one};
 
 pub struct RwLock<T> {
     state: AtomicU32,
+    write_waker: AtomicU32,
     value: UnsafeCell<T>,
 }
 
@@ -48,6 +49,7 @@ impl<T> RwLock<T> {
     pub const fn new(value: T) -> Self {
         Self {
             state: AtomicU32::new(0),
+            write_waker: AtomicU32::new(0),
             value: UnsafeCell::new(value),
         }
     }
@@ -79,11 +81,15 @@ impl<T> RwLock<T> {
     }
 
     pub fn write(&self) -> WriteGuard<'_, T> {
-        while let Err(e) =
-            self.state
-                .compare_exchange_weak(0, u32::MAX, Ordering::Acquire, Ordering::Relaxed)
+        while self
+            .state
+            .compare_exchange_weak(0, u32::MAX, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
         {
-            wait(&self.state, e);
+            let writes = self.write_waker.load(Ordering::Acquire);
+            if self.state.load(Ordering::Relaxed) != 0 {
+                wait(&self.write_waker, writes);
+            }
         }
         WriteGuard { lock: self }
     }
@@ -92,7 +98,8 @@ impl<T> RwLock<T> {
 impl<T> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
         if self.lock.state.fetch_sub(1, Ordering::Release) == 1 {
-            wake_one(&self.lock.state);
+            self.lock.write_waker.fetch_add(1, Ordering::Release);
+            wake_one(&self.lock.write_waker);
         }
     }
 }
@@ -100,6 +107,8 @@ impl<T> Drop for ReadGuard<'_, T> {
 impl<T> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         self.lock.state.store(0, Ordering::Release);
+        self.lock.write_waker.fetch_sub(1, Ordering::Release);
+        wake_one(&self.lock.write_waker);
         wake_all(&self.lock.state);
     }
 }
