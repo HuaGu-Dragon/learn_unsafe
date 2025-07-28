@@ -9,5 +9,5 @@
 * [x] unsafe One_shot
 * [x] unsafe Mutex
 * [x] unsafe Condvar
-* [ ] unsafe RwLock
+* [x] unsafe RwLock
 * [x] epoll
