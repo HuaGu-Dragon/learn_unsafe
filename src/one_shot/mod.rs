@@ -35,6 +35,12 @@ impl<T> Channel<T> {
     }
 }
 
+impl<T> Default for Channel<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Sender<'a, T> {
     channel: &'a Channel<T>,
     receiving_thread: Thread,

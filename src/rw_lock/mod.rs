@@ -2,7 +2,6 @@ use std::{
     cell::UnsafeCell,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicU32, Ordering},
-    u32,
 };
 
 use atomic_wait::{wait, wake_all, wake_one};

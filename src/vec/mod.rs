@@ -164,7 +164,7 @@ impl<T> Vec<T> {
         }
     }
 
-    pub fn drain(&mut self) -> Drain<T> {
+    pub fn drain(&mut self) -> Drain<'_, T> {
         let iter = unsafe { RawValIter::new(self) };
         self.len = 0; // Reset length to 0, as Drain will consume the elements
         Drain {

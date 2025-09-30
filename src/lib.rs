@@ -6,5 +6,6 @@ pub mod link;
 pub mod mutex;
 pub mod one_shot;
 pub mod rw_lock;
+pub mod safe;
 pub mod spinlock;
 pub mod vec;
