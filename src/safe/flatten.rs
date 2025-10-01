@@ -33,12 +33,19 @@ where
                     self.inner = None;
                 }
             }
-            let Some(next_outer) = self.outer.next() else {
-                break None;
-            };
-            self.inner = Some(next_outer.into_iter());
+            let next_outer = self.outer.next()?.into_iter();
+            self.inner = Some(next_outer);
         }
     }
+}
+
+pub fn flatten<O, T>(outer: O) -> Flatten<T>
+where
+    O: IntoIterator<IntoIter = T>,
+    T: Iterator,
+    T::Item: IntoIterator,
+{
+    Flatten::new(outer.into_iter())
 }
 
 #[cfg(test)]
@@ -54,6 +61,15 @@ mod tests {
         let v: Vec<Vec<i32>> = vec![];
         let iter = super::Flatten::new(v.into_iter());
         assert_eq!(iter.count(), 0);
+    }
+
+    #[test]
+    pub fn flatten_empty_inner() {
+        let v = vec![vec![1], vec![], vec![3]];
+        let mut iter = super::flatten(v);
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
