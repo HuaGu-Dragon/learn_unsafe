@@ -1,3 +1,15 @@
+pub trait IteratorExt: Iterator {
+    fn flatten(self) -> Flatten<Self>
+    where
+        Self: Sized,
+        Self::Item: IntoIterator,
+    {
+        Flatten::new(self)
+    }
+}
+
+impl<T> IteratorExt for T where T: Iterator {}
+
 pub struct Flatten<O>
 where
     O: Iterator,
