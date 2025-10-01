@@ -166,4 +166,17 @@ mod tests {
         assert_eq!(iter.next(), Some(2));
         assert_eq!(iter.next(), Some(0));
     }
+
+    #[test]
+    pub fn iter_flatten() {
+        let v = vec![vec![1, 2, 3], vec![4, 5, 6]];
+        let mut iter = v.into_iter().flatten();
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next_back(), Some(6));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(4));
+        assert_eq!(iter.next(), Some(5));
+        assert_eq!(iter.next(), None);
+    }
 }
