@@ -289,6 +289,31 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
     }
 }
 
+impl<T> Extend<T> for Vec<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        let iter = iter.into_iter();
+        let (lower, _) = iter.size_hint();
+
+        if std::mem::size_of::<T>() != 0 {
+            // TODO: Handle upper bound as well
+            // TODO: single allocation for all elements
+            while self.len() + lower > self.cap() {
+                self.buf.grow();
+            }
+        }
+
+        for item in iter {
+            if std::mem::size_of::<T>() != 0 && self.len() == self.cap() {
+                self.buf.grow();
+            }
+            unsafe {
+                std::ptr::write(self.ptr().add(self.len), item);
+            }
+            self.len += 1;
+        }
+    }
+}
+
 impl<T> Deref for Vec<T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
@@ -358,6 +383,13 @@ macro_rules! my_vec {
             vec
         }
     };
+    ($elem:expr; $n:expr) => {
+        {
+            let mut vec = $crate::vec::Vec::new();
+            vec.extend(std::iter::repeat_n($elem, $n));
+            vec
+        }
+    }
 }
 
 mod tests {
@@ -620,6 +652,52 @@ mod tests {
     }
 
     #[test]
+    fn test_extend() {
+        let mut vec = Vec::new();
+        vec.extend(vec![1, 2, 3]);
+        assert_eq!(vec.len, 3);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 3);
+
+        vec.extend(vec![4, 5]);
+        assert_eq!(vec.len, 5);
+        assert_eq!(vec[3], 4);
+        assert_eq!(vec[4], 5);
+    }
+
+    #[test]
+    fn test_extend_empty() {
+        let mut vec = Vec::new();
+        vec.extend(std::iter::empty::<i32>());
+        assert_eq!(vec.len, 0);
+        assert_eq!(vec.cap(), 0);
+    }
+
+    #[test]
+    fn test_extend_zero_sized() {
+        #[derive(Debug, Clone)]
+        struct ZeroSized;
+
+        impl Drop for ZeroSized {
+            fn drop(&mut self) {
+                // No-op for zero-sized type
+                println!("Dropping ZeroSized");
+            }
+        }
+
+        assert_eq!(std::mem::size_of::<ZeroSized>(), 0);
+
+        let mut vec = Vec::new();
+        vec.extend(std::iter::repeat_n(ZeroSized, 5));
+        assert_eq!(vec.len, 5);
+        assert_eq!(vec.cap(), usize::MAX); // Capacity should be usize::MAX for zero-sized types
+
+        vec.extend(std::iter::repeat_n(ZeroSized, 3));
+        assert_eq!(vec.len, 8);
+    }
+
+    #[test]
     fn test_macro_empty() {
         let vec: Vec<i32> = my_vec![];
         assert_eq!(vec.len, 0);
@@ -631,5 +709,36 @@ mod tests {
         let vec = my_vec![1];
         assert_eq!(vec.len, 1);
         assert_eq!(vec[0], 1);
+    }
+
+    #[test]
+    fn test_macro_multiple() {
+        let vec = my_vec![1, 2, 3, 4, 5];
+        assert_eq!(vec.len, 5);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 3);
+        assert_eq!(vec[3], 4);
+        assert_eq!(vec[4], 5);
+    }
+
+    #[test]
+    fn test_macro_with_trailing_comma() {
+        let vec = my_vec![1, 2, 3, 4, 5,];
+        assert_eq!(vec.len, 5);
+        assert_eq!(vec[0], 1);
+        assert_eq!(vec[1], 2);
+        assert_eq!(vec[2], 3);
+        assert_eq!(vec[3], 4);
+        assert_eq!(vec[4], 5);
+    }
+
+    #[test]
+    fn test_macro_repeat() {
+        let vec = my_vec![42; 5];
+        assert_eq!(vec.len, 5);
+        for item in vec {
+            assert_eq!(item, 42);
+        }
     }
 }
