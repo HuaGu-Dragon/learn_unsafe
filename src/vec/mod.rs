@@ -410,7 +410,8 @@ macro_rules! my_vec {
     };
     ($($elem:expr),+ $(,)?) => {
         {
-            let mut vec = $crate::vec::Vec::new();
+            const COUNT: usize = $crate::count!(@COUNT $($elem),+);
+            let mut vec = $crate::vec::Vec::with_capacity(COUNT);
             $(
                 vec.push($elem);
             )+
@@ -837,6 +838,7 @@ mod tests {
     /// ```
     /// use learn_unsafe::count;
     /// const COUNT: usize = count!(@COUNT 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    /// assert!(COUNT == 10);
     /// ```
     fn _foo() {}
 }
