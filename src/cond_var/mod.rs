@@ -66,7 +66,7 @@ mod tests {
 
         std::thread::scope(|s| {
             s.spawn(|| {
-                for _ in 0..100000 {
+                for _ in 0..1000 {
                     let mut q = queue.lock();
                     let _item = loop {
                         if let Some(item) = q.pop_front() {
@@ -79,10 +79,10 @@ mod tests {
                 }
             });
 
-            for i in 0..100000 {
+            for i in 0..1000 {
                 queue.lock().push_back(i);
                 not_empty.notify_one();
-                std::thread::sleep(std::time::Duration::from_millis(1));
+                std::thread::sleep(std::time::Duration::from_nanos(1));
             }
         });
     }

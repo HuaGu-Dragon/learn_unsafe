@@ -393,10 +393,15 @@ macro_rules! my_vec {
     }
 }
 
+pub const fn count<const N: usize>(_: [(); N]) -> usize {
+    N
+}
+
 #[macro_export]
 macro_rules! count {
     (@COUNT $($x:expr),* ) => {
-        <[()]>::len(&[$(count!(@SUBST $x)),*])
+        $crate::vec::count([$(count!(@SUBST $x)),*])
+        // <[()]>::len(&[$(count!(@SUBST $x)),*])
     };
     (@SUBST $x:expr) => {
         ()
@@ -760,4 +765,10 @@ mod tests {
         assert_eq!(count!(@COUNT 1, 2, 3), 3);
         assert_eq!(count!(@COUNT 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 10);
     }
+
+    /// ```
+    /// use learn_unsafe::count;
+    /// const COUNT: usize = count!(@COUNT 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    /// ```
+    fn _foo() {}
 }
