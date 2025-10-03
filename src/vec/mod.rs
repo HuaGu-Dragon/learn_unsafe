@@ -50,6 +50,32 @@ impl<T> RawVec<T> {
         }
     }
 
+    fn with_capacity(cap: usize) -> Self {
+        if std::mem::size_of::<T>() == 0 {
+            RawVec {
+                ptr: NonNull::dangling(),
+                cap: usize::MAX,
+                _marker: PhantomData,
+            }
+        } else {
+            assert!(
+                cap <= isize::MAX as usize / std::mem::size_of::<T>(),
+                "Capacity overflow"
+            );
+            let new_layout = std::alloc::Layout::array::<T>(cap).unwrap();
+            let new_ptr = unsafe { std::alloc::alloc(new_layout) };
+            let ptr = match NonNull::new(new_ptr as *mut T) {
+                Some(ptr) => ptr,
+                None => std::alloc::handle_alloc_error(new_layout),
+            };
+            RawVec {
+                ptr,
+                cap,
+                _marker: PhantomData,
+            }
+        }
+    }
+
     fn grow(&mut self) {
         assert!(
             std::mem::size_of::<T>() != 0,
@@ -131,6 +157,13 @@ impl<T> Vec<T> {
     fn new() -> Self {
         Vec {
             buf: RawVec::new(),
+            len: 0,
+        }
+    }
+
+    fn with_capacity(cap: usize) -> Self {
+        Vec {
+            buf: RawVec::with_capacity(cap),
             len: 0,
         }
     }
@@ -665,6 +698,41 @@ mod tests {
         let mut vec = Vec::new();
         vec.push(ZeroSized);
         vec.buf.grow(); // This should panic due to overflow
+    }
+
+    #[test]
+    fn test_with_capacity() {
+        let vec: Vec<i32> = Vec::with_capacity(10);
+        assert_eq!(vec.len, 0);
+        assert_eq!(vec.cap(), 10);
+    }
+
+    #[test]
+    fn test_with_capacity_zero_sized() {
+        #[derive(Debug)]
+        struct ZeroSized;
+
+        assert_eq!(std::mem::size_of::<ZeroSized>(), 0);
+
+        let vec: Vec<ZeroSized> = Vec::with_capacity(10);
+        assert_eq!(vec.len, 0);
+        assert_eq!(vec.cap(), usize::MAX); // Capacity should be usize::MAX for zero-sized types
+    }
+
+    #[test]
+    fn with_capacity_realloc() {
+        let mut vec: Vec<i32> = Vec::with_capacity(2);
+        assert_eq!(vec.len, 0);
+        assert_eq!(vec.cap(), 2);
+
+        vec.push(1);
+        vec.push(2);
+        assert_eq!(vec.len, 2);
+        assert_eq!(vec.cap(), 2);
+
+        vec.push(3); // This should trigger a grow
+        assert_eq!(vec.len, 3);
+        assert!(vec.cap() >= 3); // Capacity should be at least 3 after grow
     }
 
     #[test]
