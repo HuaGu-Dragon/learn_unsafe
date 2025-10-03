@@ -344,6 +344,22 @@ impl<T> Drop for IntoIter<T> {
     }
 }
 
+#[macro_export]
+macro_rules! my_vec {
+    () => {
+        $crate::vec::Vec::new()
+    };
+    ($($elem:expr),+ $(,)?) => {
+        {
+            let mut vec = $crate::vec::Vec::new();
+            $(
+                vec.push($elem);
+            )+
+            vec
+        }
+    };
+}
+
 mod tests {
 
     #![allow(unused_imports)]
@@ -601,5 +617,19 @@ mod tests {
         let mut vec = Vec::new();
         vec.push(ZeroSized);
         vec.buf.grow(); // This should panic due to overflow
+    }
+
+    #[test]
+    fn test_macro_empty() {
+        let vec: Vec<i32> = my_vec![];
+        assert_eq!(vec.len, 0);
+        assert_eq!(vec.cap(), 0);
+    }
+
+    #[test]
+    fn test_macro_single() {
+        let vec = my_vec![1];
+        assert_eq!(vec.len, 1);
+        assert_eq!(vec[0], 1);
     }
 }
