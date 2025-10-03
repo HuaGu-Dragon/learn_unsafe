@@ -212,6 +212,7 @@ impl<T> Iterator for RawValIter<T> {
             None
         } else if std::mem::size_of::<T>() == 0 {
             self.start = (self.start as usize + 1) as *const T; // For zero-sized types, we use the size of the slice
+            // NOTE: Here cannot use `self.start` because it may be not aligned, use `NonNull::dangling()` instead
             unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
         } else {
             let ptr = self.start; // Save the current pointer
@@ -390,6 +391,16 @@ macro_rules! my_vec {
             vec
         }
     }
+}
+
+#[macro_export]
+macro_rules! count {
+    (@COUNT $($x:expr),* ) => {
+        <[()]>::len(&[$(count!(@SUBST $x)),*])
+    };
+    (@SUBST $x:expr) => {
+        ()
+    };
 }
 
 mod tests {
@@ -740,5 +751,13 @@ mod tests {
         for item in vec {
             assert_eq!(item, 42);
         }
+    }
+
+    #[test]
+    fn test_count() {
+        assert_eq!(count!(@COUNT ), 0);
+        assert_eq!(count!(@COUNT 1), 1);
+        assert_eq!(count!(@COUNT 1, 2, 3), 3);
+        assert_eq!(count!(@COUNT 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 10);
     }
 }
