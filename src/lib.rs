@@ -1,5 +1,6 @@
 pub mod arc;
 pub mod r#box;
+pub mod cell;
 pub mod cond_var;
 pub mod epoll;
 pub mod link;
