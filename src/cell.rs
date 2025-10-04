@@ -161,4 +161,21 @@ mod tests {
         let inner = cell.into_inner();
         assert_eq!(inner, "Hello");
     }
+
+    #[test]
+    fn test_refcell() {
+        let refcell = RefCell::new(vec![42]);
+        assert_eq!(refcell.borrow().unwrap()[0], 42);
+        refcell.borrow_mut().unwrap().push(42);
+        assert_eq!(refcell.borrow().unwrap().len(), 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn refcell_panic() {
+        let refcell = RefCell::new(vec![42]);
+        for _ in 0..refcell.borrow().unwrap().len() {
+            refcell.borrow_mut().unwrap().push(42);
+        }
+    }
 }
