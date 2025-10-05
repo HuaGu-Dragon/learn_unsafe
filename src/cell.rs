@@ -1,5 +1,6 @@
 use std::{
     cell::UnsafeCell,
+    marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
@@ -55,10 +56,14 @@ unsafe impl<T> Send for RefCell<T> where T: Send {}
 
 pub struct Ref<'refcell, T> {
     cell: &'refcell RefCell<T>,
+    // impl !Send
+    _marker: PhantomData<*const T>,
 }
 
 pub struct RefMut<'refcell, T> {
     cell: &'refcell RefCell<T>,
+    // impl !Send
+    _marker: PhantomData<*const T>,
 }
 
 impl<T> RefCell<T> {
@@ -73,11 +78,17 @@ impl<T> RefCell<T> {
         match self.state.get() {
             BorrowState::Unshared => {
                 self.state.set(BorrowState::Shared(1));
-                Some(Ref { cell: self })
+                Some(Ref {
+                    cell: self,
+                    _marker: PhantomData,
+                })
             }
             BorrowState::Shared(n) => {
                 self.state.set(BorrowState::Shared(n + 1));
-                Some(Ref { cell: self })
+                Some(Ref {
+                    cell: self,
+                    _marker: PhantomData,
+                })
             }
             BorrowState::Exclusive => None,
         }
@@ -87,7 +98,10 @@ impl<T> RefCell<T> {
         match self.state.get() {
             BorrowState::Unshared => {
                 self.state.set(BorrowState::Exclusive);
-                Some(RefMut { cell: self })
+                Some(RefMut {
+                    cell: self,
+                    _marker: PhantomData,
+                })
             }
             _ => None,
         }
