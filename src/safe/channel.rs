@@ -46,6 +46,7 @@ impl<T> Drop for Sender<T> {
 
 pub struct Receiver<T> {
     shared: Arc<Shared<T>>,
+    buffer: VecDeque<T>,
     // impl !Send and !Sync
     marker: PhantomData<*const T>,
 }
@@ -54,15 +55,29 @@ pub struct Receiver<T> {
 unsafe impl<T: Send> Send for Receiver<T> {}
 
 impl<T> Receiver<T> {
-    pub fn recv(&self) -> Option<T> {
+    pub fn recv(&mut self) -> Option<T> {
+        if let Some(value) = self.buffer.pop_front() {
+            return Some(value);
+        }
         let mut shared = self.shared.inner.lock().unwrap();
         loop {
             match shared.queue.pop_front() {
-                Some(value) => break Some(value),
+                Some(value) => {
+                    std::mem::swap(&mut self.buffer, &mut shared.queue);
+                    break Some(value);
+                }
                 None if shared.senders == 0 => break None,
                 None => shared = self.shared.available.wait(shared).unwrap(),
             }
         }
+    }
+}
+
+impl<T> Iterator for Receiver<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.recv()
     }
 }
 
@@ -92,6 +107,7 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
         },
         Receiver {
             shared: inner,
+            buffer: VecDeque::new(),
             marker: PhantomData,
         },
     )
@@ -103,14 +119,14 @@ mod tests {
 
     #[test]
     fn ping_pong() {
-        let (tx, rx) = channel();
+        let (tx, mut rx) = channel();
         tx.send(42);
         assert_eq!(rx.recv(), Some(42));
     }
 
     #[test]
     fn closed() {
-        let (tx, rx) = channel::<i32>();
+        let (tx, mut rx) = channel::<i32>();
         drop(tx);
         assert_eq!(rx.recv(), None);
     }
