@@ -39,6 +39,10 @@ impl<T> Rc<T> {
             _marker: PhantomData,
         }
     }
+
+    pub fn strong(&self) -> usize {
+        unsafe { self.inner.as_ref().strong.get() }
+    }
 }
 
 impl<T> Deref for Rc<T> {
@@ -58,5 +62,32 @@ impl<T> Drop for Rc<T> {
         } else {
             inner.strong.set(c - 1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::rc::Rc;
+
+    #[test]
+    fn it_works() {
+        let rc = Rc::new(42);
+        let cl = rc.clone();
+        assert_eq!(rc.strong(), 2);
+        assert_eq!(cl.strong(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "drop")]
+    fn drop_works() {
+        struct D;
+        impl Drop for D {
+            fn drop(&mut self) {
+                panic!("drop");
+            }
+        }
+
+        let rc = Rc::new(D);
+        drop(rc);
     }
 }
