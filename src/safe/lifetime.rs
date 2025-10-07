@@ -17,11 +17,15 @@ mod tests {
     #[test]
     fn test_str_tok() {
         let s = "hello,world,test".to_string();
-        let token = &mut s.as_str();
-        assert_eq!(str_tok(&mut , ','), Some("hello"));
-        assert_eq!(str_tok(&mut , ','), Some("world"));
-        assert_eq!(str_tok(&mut , ','), Some("test"));
-        assert_eq!(str_tok(&mut , ','), None);
-        assert_eq!(s, "");
+        let mut token = s.as_str();
+        let mut ret = str_tok(&mut token, ',').unwrap();
+        assert_eq!(ret, "hello");
+        assert_eq!(token, "world,test");
+        ret = str_tok(&mut token, ',').unwrap();
+        assert_eq!(ret, "world");
+        assert_eq!(token, "test");
+        ret = str_tok(&mut token, ',').unwrap();
+        assert_eq!(ret, "test");
+        assert_eq!(token, "");
     }
 }
