@@ -56,7 +56,7 @@ impl<T> RwLock<T> {
     pub fn read(&self) -> ReadGuard<'_, T> {
         let mut state = self.state.load(Ordering::Relaxed);
         loop {
-            if state % 2 == 0 {
+            if state.is_multiple_of(2) {
                 assert!(state < u32::MAX - 2, "too many readers");
                 match self.state.compare_exchange_weak(
                     state,
@@ -95,7 +95,7 @@ impl<T> RwLock<T> {
                 }
             }
 
-            if state % 2 == 0 {
+            if state.is_multiple_of(2) {
                 match self.state.compare_exchange(
                     state,
                     state + 1,
