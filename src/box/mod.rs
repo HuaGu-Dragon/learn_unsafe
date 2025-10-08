@@ -137,7 +137,14 @@ impl<T: Debug + ?Sized> Debug for Box<T> {
     }
 }
 
-impl<T: ?Sized> Drop for Box<T> {
+/// ```
+/// use learn_unsafe::r#box::Box;
+/// let mut a = 42;
+/// let b = Box::new(&mut a);
+/// println!("{:?}", a);
+/// ```
+unsafe impl<#[may_dangle] T: ?Sized> Drop for Box<T> {
+    #[inline]
     fn drop(&mut self) {
         // Deallocate the memory for T
         unsafe {
@@ -379,6 +386,21 @@ mod test {
         let boxed_zst1 = Box::new(MyZST);
         let boxed_zst2 = boxed_zst1.clone();
         assert_eq!(boxed_zst1.as_ref(), boxed_zst2.as_ref());
+    }
+
+    #[test]
+    #[should_panic(expected = "Drop called on MyStruct")]
+    fn test_t_drop() {
+        struct MyStruct;
+
+        impl Drop for MyStruct {
+            fn drop(&mut self) {
+                panic!("Drop called on MyStruct");
+            }
+        }
+
+        let _boxed_struct: Box<MyStruct> = Box::new(MyStruct);
+        // The drop will happen automatically at the end of this scope
     }
 
     #[test]

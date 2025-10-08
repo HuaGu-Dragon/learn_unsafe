@@ -1,3 +1,5 @@
+#![feature(dropck_eyepatch)]
+
 pub mod arc;
 pub mod r#box;
 pub mod cell;
