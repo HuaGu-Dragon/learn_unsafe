@@ -10,6 +10,19 @@ pub fn str_tok<'s>(s: &mut &'s str, delim: char) -> Option<&'s str> {
     }
 }
 
+///```compile_fail
+///
+/// fn make_static(_s: &'static str) {}
+///
+/// let mut static_str: &'static str = "static";
+/// make_static(static_str); // In order to avoid inheriting 'static lifetime
+/// let mut s = String::from("local");
+/// let s_ref = &mut static_str;
+/// *s_ref = &mut s;
+///
+/// ```
+fn _foo() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
