@@ -78,6 +78,14 @@ impl<T> SpinLock<T> {
         // SAFETY: We have exclusive access to the data while the lock is held
         SpinLockGuard::new(self)
     }
+
+    pub fn with_fn<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut lock = self.lock();
+        f(&mut *lock)
+    }
 }
 
 unsafe impl<T: Send> Send for SpinLock<T> {}
@@ -124,6 +132,24 @@ mod tests {
         });
         let mut data = lock.lock();
         data.push(3);
+        assert_eq!(data.len(), 3);
+        assert_eq!(data.iter().sum::<i32>(), 6);
+    }
+
+    #[test]
+    fn spinlock_with_fn() {
+        let lock = SpinLock::new(vec![]);
+
+        lock.with_fn(|data| {
+            data.push(1);
+            data.push(2);
+        });
+
+        lock.with_fn(|data| {
+            data.push(3);
+        });
+
+        let data = lock.lock();
         assert_eq!(data.len(), 3);
         assert_eq!(data.iter().sum::<i32>(), 6);
     }
