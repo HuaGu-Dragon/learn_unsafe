@@ -33,6 +33,14 @@ impl<T> Mutex<T> {
             _marker: std::marker::PhantomData,
         }
     }
+
+    pub fn with_fn<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut lock = self.lock();
+        f(&mut *lock)
+    }
 }
 
 fn lock_contended(state: &AtomicU32) {
@@ -125,5 +133,26 @@ mod tests {
         });
         let guard = mutex.lock();
         assert_eq!(*guard, 10000000); // Check the final value after high contention
+    }
+
+    #[test]
+    fn test_mutex_with_fn() {
+        let mutex = Mutex::new(vec![]);
+
+        mutex.with_fn(|data| {
+            data.push(1);
+            data.push(2);
+        });
+
+        mutex.with_fn(|data| {
+            data.push(3);
+        });
+
+        mutex.with_fn(|data| {
+            assert_eq!(data.len(), 3);
+            assert_eq!(data[0], 1);
+            assert_eq!(data[1], 2);
+            assert_eq!(data[2], 3);
+        });
     }
 }
