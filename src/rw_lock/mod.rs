@@ -125,6 +125,14 @@ impl<T> RwLock<T> {
         let lock = self.read();
         f(&*lock)
     }
+
+    pub fn with_write<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut lock = self.write();
+        f(&mut *lock)
+    }
 }
 
 impl<T> Drop for ReadGuard<'_, T> {
@@ -196,5 +204,13 @@ mod tests {
         let rw = RwLock::new(vec![1, 2, 3]);
         let sum = rw.with_read(|data| data.iter().sum::<i32>());
         assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn test_with_write() {
+        let rw = RwLock::new(vec![1, 2, 3]);
+        rw.with_write(|data| data.push(4));
+        let sum = rw.with_read(|data| data.iter().sum::<i32>());
+        assert_eq!(sum, 10);
     }
 }
