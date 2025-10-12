@@ -117,6 +117,14 @@ impl<T> RwLock<T> {
             }
         }
     }
+
+    pub fn with_read<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let lock = self.read();
+        f(&*lock)
+    }
 }
 
 impl<T> Drop for ReadGuard<'_, T> {
@@ -181,5 +189,12 @@ mod tests {
                 println!("{:?}", *r2);
             });
         })
+    }
+
+    #[test]
+    fn test_with_read() {
+        let rw = RwLock::new(vec![1, 2, 3]);
+        let sum = rw.with_read(|data| data.iter().sum::<i32>());
+        assert_eq!(sum, 6);
     }
 }
