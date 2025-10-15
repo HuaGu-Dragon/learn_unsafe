@@ -83,6 +83,7 @@ mod tests {
     fn bench() {
         let comparisons = Rc::new(Cell::new(0));
         let bench = |sorter: &dyn Sorter<_>| {
+            comparisons.set(0);
             let mut slice: Vec<SortEvaluator<i32>> = (0..1000)
                 .rev()
                 .map(|v| SortEvaluator {
