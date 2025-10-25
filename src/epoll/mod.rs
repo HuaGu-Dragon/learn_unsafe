@@ -174,6 +174,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[ignore = "Requires external server running on 127.0.0.1:8080"]
     fn test_ffi_work() {
         unsafe {
             let fd = ffi::epoll_create(1);
@@ -300,6 +301,7 @@ mod test {
     }
 
     #[test]
+    #[ignore = "Requires external server running on 127.0.0.1:8080"]
     fn test_epoll() {
         let mut epoll = Poll::new().expect("Failed to create epoll instance");
         let events_len = 10;
