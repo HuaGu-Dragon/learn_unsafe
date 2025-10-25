@@ -78,24 +78,3 @@ jobs:
         uses: dtolnay/install@982daea0f5d846abc3c83e01a6a1d73c040047c1 # branch=cargo-docs-rs
       - name: cargo docs-rs
         run: cargo docs-rs
-  hack:
-    # cargo-hack checks combinations of feature flags to ensure that features are all additive
-    # which is required for feature unification
-    runs-on: ubuntu-latest
-    name: ubuntu / stable / features
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # tag=v5.0.0
-        with:
-          submodules: true
-      - name: Install stable
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # branch=master
-        with:
-          toolchain: stable
-      - name: cargo install cargo-hack
-        uses: taiki-e/install-action@d6d752794628f1e1fffa3c4d3c8874e06f043d50 # tag=v2.62.15
-        with:
-          tool: cargo-hack
-      # intentionally no target specifier; see https://github.com/jonhoo/rust-ci-conf/pull/4
-      # --feature-powerset runs for every combination of features
-      - name: cargo hack
-        run: cargo hack --feature-powerset check

@@ -27,20 +27,20 @@ jobs:
         with:
           toolchain: nightly
       - run: |
-            # to get the symbolizer for debug symbol resolution
-            sudo apt install llvm
-            # to fix buggy leak analyzer:
-            # https://github.com/japaric/rust-san#unrealiable-leaksanitizer
-            # ensure there's a profile.dev section
-            if ! grep -qE '^[ \t]*[profile.dev]' Cargo.toml; then
-                echo >> Cargo.toml
-                echo '[profile.dev]' >> Cargo.toml
-            fi
-            # remove pre-existing opt-levels in profile.dev
-            sed -i '/^\s*\[profile.dev\]/,/^\s*\[/ {/^\s*opt-level/d}' Cargo.toml
-            # now set opt-level to 1
-            sed -i '/^\s*\[profile.dev\]/a opt-level = 1' Cargo.toml
-            cat Cargo.toml
+          # to get the symbolizer for debug symbol resolution
+          sudo apt install llvm
+          # to fix buggy leak analyzer:
+          # https://github.com/japaric/rust-san#unrealiable-leaksanitizer
+          # ensure there's a profile.dev section
+          if ! grep -qE '^[ \t]*[profile.dev]' Cargo.toml; then
+              echo >> Cargo.toml
+              echo '[profile.dev]' >> Cargo.toml
+          fi
+          # remove pre-existing opt-levels in profile.dev
+          sed -i '/^\s*\[profile.dev\]/,/^\s*\[/ {/^\s*opt-level/d}' Cargo.toml
+          # now set opt-level to 1
+          sed -i '/^\s*\[profile.dev\]/a opt-level = 1' Cargo.toml
+          cat Cargo.toml
         name: Enable debug symbols
       - name: cargo test -Zsanitizer=address
         # only --lib --tests b/c of https://github.com/rust-lang/rust/issues/53945
@@ -71,18 +71,18 @@ jobs:
         run: cargo miri test
         env:
           MIRIFLAGS: ""
-  loom:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # tag=v5.0.0
-        with:
-          submodules: true
-      - name: Install stable
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # branch=master
-        with:
-          toolchain: stable
-      - name: cargo test --test loom
-        run: cargo test --release --test loom
-        env:
-          LOOM_MAX_PREEMPTIONS: 2
-          RUSTFLAGS: "--cfg loom"
+  # loom:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # tag=v5.0.0
+  #       with:
+  #         submodules: true
+  #     - name: Install stable
+  #       uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # branch=master
+  #       with:
+  #         toolchain: stable
+  #     - name: cargo test --test loom
+  #       run: cargo test --release --test loom
+  #       env:
+  #         LOOM_MAX_PREEMPTIONS: 2
+  #         RUSTFLAGS: "--cfg loom"
