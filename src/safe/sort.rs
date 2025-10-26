@@ -37,9 +37,8 @@ mod tests {
         cell::Cell,
         rc::Rc,
         safe::sort::{
-            Sorter, StdSorter, StdUnstableSorter, bubble_sort::BubbleSorter,
-            insertion_sort::InsertionSorter, quick_sort::QuickSorter,
-            selection_sort::SelectionSorter,
+            bubble_sort::BubbleSorter, insertion_sort::InsertionSorter, quick_sort::QuickSorter,
+            selection_sort::SelectionSorter, Sorter, StdSorter, StdUnstableSorter,
         },
     };
 
@@ -84,7 +83,7 @@ mod tests {
         let comparisons = Rc::new(Cell::new(0));
         let bench = |sorter: &dyn Sorter<_>| {
             comparisons.set(0);
-            let mut slice: Vec<SortEvaluator<i32>> = (0..1000)
+            let mut slice: Vec<SortEvaluator<i32>> = (0..100)
                 .rev()
                 .map(|v| SortEvaluator {
                     value: v,

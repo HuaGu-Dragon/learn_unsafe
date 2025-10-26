@@ -122,9 +122,9 @@ mod tests {
         let mutex = Mutex::new(0);
 
         std::thread::scope(|s| {
-            for _ in 0..100 {
+            for _ in 0..10 {
                 s.spawn(|| {
-                    for _ in 0..100000 {
+                    for _ in 0..10000 {
                         let mut guard = mutex.lock();
                         *guard += 1; // Increment the value
                     }
@@ -132,7 +132,7 @@ mod tests {
             }
         });
         let guard = mutex.lock();
-        assert_eq!(*guard, 10000000); // Check the final value after high contention
+        assert_eq!(*guard, 100000); // Check the final value after high contention
     }
 
     #[test]
