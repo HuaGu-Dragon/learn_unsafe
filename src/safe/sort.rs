@@ -37,8 +37,9 @@ mod tests {
         cell::Cell,
         rc::Rc,
         safe::sort::{
-            bubble_sort::BubbleSorter, insertion_sort::InsertionSorter, quick_sort::QuickSorter,
-            selection_sort::SelectionSorter, Sorter, StdSorter, StdUnstableSorter,
+            Sorter, StdSorter, StdUnstableSorter, bubble_sort::BubbleSorter,
+            insertion_sort::InsertionSorter, quick_sort::QuickSorter,
+            selection_sort::SelectionSorter,
         },
     };
 

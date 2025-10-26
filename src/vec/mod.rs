@@ -142,7 +142,11 @@ impl<T> RawValIter<T> {
         RawValIter {
             start: slice.as_ptr(),
             end: if std::mem::size_of::<T>() == 0 {
-                ((slice.as_ptr()) as usize + slice.len()) as *const T // For zero-sized types, we use the size of the slice
+                std::ptr::with_exposed_provenance((slice.as_ptr()) as usize + slice.len()) // For zero-sized types, we use the size of the slice
+            // ((slice.as_ptr()) as usize + slice.len()) as *const T
+            // = help: this program is using integer-to-pointer casts or (equivalently) `ptr::with_exposed_provenance`, which means that Miri might miss pointer bugs in this program
+            // = help: see https://doc.rust-lang.org/nightly/std/ptr/fn.with_exposed_provenance.html for more details on that operation
+            // = help: to ensure that Miri does not miss bugs in your program, use Strict Provenance APIs (https://doc.rust-lang.org/nightly/std/ptr/index.html#strict-provenance, https://crates.io/crates/sptr) instead
             } else if slice.is_empty() {
                 slice.as_ptr()
             } else {
@@ -244,7 +248,11 @@ impl<T> Iterator for RawValIter<T> {
         if self.start == self.end {
             None
         } else if std::mem::size_of::<T>() == 0 {
-            self.start = (self.start as usize + 1) as *const T; // For zero-sized types, we use the size of the slice
+            self.start = std::ptr::with_exposed_provenance(self.start as usize + 1); // For zero-sized types, we use the size of the slice
+            // self.start = (self.start as usize + 1) as *const T;
+            // = help: this program is using integer-to-pointer casts or (equivalently) `ptr::with_exposed_provenance`, which means that Miri might miss pointer bugs in this program
+            // = help: see https://doc.rust-lang.org/nightly/std/ptr/fn.with_exposed_provenance.html for more details on that operation
+            // = help: to ensure that Miri does not miss bugs in your program, use Strict Provenance APIs (https://doc.rust-lang.org/nightly/std/ptr/index.html#strict-provenance, https://crates.io/crates/sptr) instead
             // NOTE: Here cannot use `self.start` because it may be not aligned, use `NonNull::dangling()` instead
             unsafe { Some(std::ptr::read(NonNull::<T>::dangling().as_ptr())) }
         } else {
