@@ -104,7 +104,7 @@ jobs:
           toolchain: nightly
           components: llvm-tools-preview
       - name: cargo install cargo-llvm-cov
-        uses: taiki-e/install-action@ebb229c6baa68383264f2822689b07b4916d9177 # tag=v2.62.36
+        uses: taiki-e/install-action@81ecf985428d5c2ea81dbf079bceca32bc9604ab # tag=v2.62.43
         with:
           tool: cargo-llvm-cov
       - name: cargo generate-lockfile
