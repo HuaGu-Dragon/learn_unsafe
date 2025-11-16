@@ -24,3 +24,4 @@
 * [x] Channel
 * [x] Iterator
 * [x] Lifetime
+* [x] Map
