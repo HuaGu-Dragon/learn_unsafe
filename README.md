@@ -18,7 +18,7 @@
 * [x] Cell
 * [x] Rc
 
-## unsafe
+## Safe
 
 * [x] Sort
 * [x] Channel
