@@ -1,0 +1,81 @@
+use std::{
+    pin::Pin,
+    sync::{
+        Arc,
+        mpsc::{Receiver, SyncSender, sync_channel},
+    },
+    task::Context,
+};
+
+use futures::{
+    FutureExt,
+    task::{self, ArcWake},
+};
+
+use crate::mutex::Mutex;
+
+struct Executor {
+    ready_queue: Receiver<Arc<Task>>,
+}
+
+impl Executor {
+    fn run(&self) {
+        while let Ok(task) = self.ready_queue.recv() {
+            let mut future_slot = task.future.lock();
+            if let Some(mut future) = future_slot.take() {
+                let waker = task::waker_ref(&task);
+                let context = &mut Context::from_waker(&waker);
+
+                if future.as_mut().poll(context).is_pending() {
+                    *future_slot = Some(future);
+                }
+            }
+        }
+    }
+}
+
+struct Spawner {
+    task_sender: SyncSender<Arc<Task>>,
+}
+
+impl Spawner {
+    fn spawn(&self, future: impl Future<Output = ()> + Send + 'static) {
+        let future = future.boxed();
+        let task = Arc::new(Task {
+            future: Mutex::new(Some(future)),
+            task_sender: self.task_sender.clone(),
+        });
+        self.task_sender.send(task).expect("task queue full");
+    }
+}
+
+struct Task {
+    future: Mutex<Option<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>>,
+
+    task_sender: SyncSender<Arc<Task>>,
+}
+
+impl ArcWake for Task {
+    fn wake_by_ref(arc_self: &std::sync::Arc<Self>) {
+        let cloned = arc_self.clone();
+        arc_self.task_sender.send(cloned).expect("task queue full");
+    }
+}
+
+fn new_executor_and_spawner() -> (Executor, Spawner) {
+    let (task_sender, ready_queue) = sync_channel(10_000);
+    (Executor { ready_queue }, Spawner { task_sender })
+}
+
+#[test]
+fn test_executor() {
+    let (executor, spawner) = new_executor_and_spawner();
+
+    spawner.spawn(async {
+        println!("Hello from the future!");
+    });
+
+    drop(spawner);
+
+    executor.run();
+}
