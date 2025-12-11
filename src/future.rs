@@ -14,12 +14,12 @@ use futures::{
 
 use crate::mutex::Mutex;
 
-struct Executor {
+pub struct Executor {
     ready_queue: Receiver<Arc<Task>>,
 }
 
 impl Executor {
-    fn run(&self) {
+    pub fn run(&self) {
         while let Ok(task) = self.ready_queue.recv() {
             let mut future_slot = task.future.lock();
             if let Some(mut future) = future_slot.take() {
@@ -34,12 +34,12 @@ impl Executor {
     }
 }
 
-struct Spawner {
+pub struct Spawner {
     task_sender: SyncSender<Arc<Task>>,
 }
 
 impl Spawner {
-    fn spawn(&self, future: impl Future<Output = ()> + Send + 'static) {
+    pub fn spawn(&self, future: impl Future<Output = ()> + Send + 'static) {
         let future = future.boxed();
         let task = Arc::new(Task {
             future: Mutex::new(Some(future)),
@@ -49,7 +49,7 @@ impl Spawner {
     }
 }
 
-struct Task {
+pub struct Task {
     future: Mutex<Option<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>>,
 
     task_sender: SyncSender<Arc<Task>>,
@@ -62,20 +62,25 @@ impl ArcWake for Task {
     }
 }
 
-fn new_executor_and_spawner() -> (Executor, Spawner) {
+pub fn new_executor_and_spawner() -> (Executor, Spawner) {
     let (task_sender, ready_queue) = sync_channel(10_000);
     (Executor { ready_queue }, Spawner { task_sender })
 }
 
-#[test]
-fn test_executor() {
-    let (executor, spawner) = new_executor_and_spawner();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    spawner.spawn(async {
-        println!("Hello from the future!");
-    });
+    #[test]
+    fn test_executor() {
+        let (executor, spawner) = new_executor_and_spawner();
 
-    drop(spawner);
+        spawner.spawn(async {
+            println!("Hello from the future!");
+        });
 
-    executor.run();
+        drop(spawner);
+
+        executor.run();
+    }
 }
