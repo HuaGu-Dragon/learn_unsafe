@@ -14,6 +14,8 @@ use futures::{
 
 use crate::mutex::Mutex;
 
+mod timer;
+
 pub struct Executor {
     ready_queue: Receiver<Arc<Task>>,
 }
@@ -69,6 +71,10 @@ pub fn new_executor_and_spawner() -> (Executor, Spawner) {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use crate::future::timer::Timer;
+
     use super::*;
 
     #[test]
@@ -77,6 +83,21 @@ mod tests {
 
         spawner.spawn(async {
             println!("Hello from the future!");
+        });
+
+        drop(spawner);
+
+        executor.run();
+    }
+
+    #[test]
+    fn test_timer() {
+        let (executor, spawner) = new_executor_and_spawner();
+
+        spawner.spawn(async {
+            println!("howdy!");
+            Timer::new(Duration::from_secs(2)).await;
+            println!("done!");
         });
 
         drop(spawner);
