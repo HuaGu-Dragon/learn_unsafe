@@ -14,7 +14,7 @@ use futures::{
 
 use crate::mutex::Mutex;
 
-mod timer;
+pub mod timer;
 
 pub struct Executor {
     ready_queue: Receiver<Arc<Task>>,
@@ -98,6 +98,33 @@ mod tests {
             println!("howdy!");
             Timer::new(Duration::from_secs(2)).await;
             println!("done!");
+        });
+
+        drop(spawner);
+
+        executor.run();
+    }
+
+    #[test]
+    fn test_multiple_timers() {
+        let (executor, spawner) = new_executor_and_spawner();
+
+        spawner.spawn(async {
+            println!("Task 1 started");
+            Timer::new(Duration::from_secs(3)).await;
+            println!("Task 1 finished (3s)");
+        });
+
+        spawner.spawn(async {
+            println!("Task 2 started");
+            Timer::new(Duration::from_secs(1)).await;
+            println!("Task 2 finished (1s)");
+        });
+
+        spawner.spawn(async {
+            println!("Task 3 started");
+            Timer::new(Duration::from_secs(2)).await;
+            println!("Task 3 finished (2s)");
         });
 
         drop(spawner);
