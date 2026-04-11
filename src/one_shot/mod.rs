@@ -19,7 +19,6 @@ impl<T> Channel<T> {
     }
 
     pub fn split(&mut self) -> (Sender<'_, T>, Receiver<'_, T>) {
-        *self = Self::new();
         (
             Sender {
                 channel: self,
@@ -64,9 +63,9 @@ pub struct Receiver<'a, T> {
 
 impl<T> Receiver<'_, T> {
     pub fn recv(self) -> T {
-        if !self.channel.ready.swap(false, Ordering::Acquire) {
+        while !self.channel.ready.swap(false, Ordering::Acquire) {
             std::thread::park();
-        };
+        }
         unsafe {
             // SAFETY: We assume the message is ready to be read
             (*self.channel.message.get()).assume_init_read()
