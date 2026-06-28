@@ -94,3 +94,38 @@ where
             .push_back(token)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    #[test]
+    fn test_block_on() {
+        let future = async { 42 };
+
+        assert_eq!(block_on(future), 42);
+    }
+
+    #[test]
+    fn test_spawn() {
+        let x = Arc::new(Mutex::new(42));
+
+        let x_clone = x.clone();
+        spawn(async move {
+            let mut x = x_clone.lock().unwrap();
+            *x += 1;
+        });
+
+        let x_clone = x.clone();
+        let future = async move {
+            let mut x = x_clone.lock().unwrap();
+            *x += 1;
+            *x
+        };
+
+        assert_eq!(block_on(future), 44);
+        assert_eq!(*x.lock().unwrap(), 44);
+    }
+}
